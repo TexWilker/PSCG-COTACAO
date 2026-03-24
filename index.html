@@ -7,6 +7,8 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 20px; color: #333; }
         h1, h2, h3 { background: #1a2a3a; color: #fff; padding: 15px; border-radius: 6px; margin-top: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
@@ -149,10 +151,7 @@ td {
 <div id="historico" class="tab-content">
     <div class="box">
         <h3>📚 HISTÓRICO DE COTAÇÕES</h3>
-        <table>
-            <thead><tr><th>DATA</th><th>CC</th><th>FORNECEDOR</th><th>TOTAL</th><th>STATUS</th><th>AÇÃO</th></tr></thead>
-            <tbody id="tbodyHistorico"></tbody>
-        </table>
+        <div id="tabHistoricoWrapper"></div>
     </div>
 </div>
 
@@ -516,14 +515,14 @@ function renderizarTabelas() {
             html += `</tr></thead><tbody>`;
 
             itens.forEach((it, idx) => {
-                // AJUSTE DE SEGURANÇA: Garante que it.valores existe e é um array
+                // Segurança contra valores inexistentes
                 const listaValores = it.valores || [];
                 const precosValidos = listaValores.filter(v => typeof v === 'number' && v > 0);
                 const min = precosValidos.length > 0 ? Math.min(...precosValidos) : null;
 
                 html += `<tr><td style="text-align:left">${it.p}</td><td>${it.qtd}</td>`;
                 
-                // Percorre os fornecedores para garantir que a tabela não quebre se faltar valor
+                // Itera sobre fornecedores para preencher as colunas corretamente
                 fornecedores.forEach((_, fIdx) => {
                     const v = listaValores[fIdx] || 0;
                     const sub = v * it.qtd;
@@ -628,6 +627,36 @@ function renderizarTabelas() {
             containerAprov.innerHTML += loteHtml;
         });
     }
+
+    // --- RENDERIZAÇÃO DA ABA 3 (HISTÓRICO) ---
+    const containerHist = document.getElementById('tabHistoricoWrapper');
+    if (containerHist) {
+        containerHist.innerHTML = "";
+        if (!historico || historico.length === 0) {
+            containerHist.innerHTML = "<p style='text-align:center; padding:20px;'>Nenhum registro no histórico.</p>";
+        } else {
+            // Inverte a ordem para mostrar os mais recentes primeiro
+            [...historico].reverse().forEach((lote, hIdxOriginal) => {
+                const hIdx = historico.length - 1 - hIdxOriginal;
+                const corStatus = lote.status === 'APROVADO' ? '#28a745' : '#dc3545';
+                
+                let histHtml = `
+                <div class="box" style="border-left: 8px solid ${corStatus}; margin-bottom: 15px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center">
+                        <h4>📜 ${lote.status} | CC: ${lote.cc} | PEDIDO: ${lote.numeroPedido || 'N/D'}</h4>
+                        <span style="font-size:12px; color:#666">${lote.dataDecisao || lote.data}</span>
+                    </div>
+                    <p style="margin: 10px 0;"><strong>Vencedor:</strong> ${lote.vence} | <strong>Total:</strong> ${lote.total}</p>
+                    <div style="display:flex; gap:5px;">
+                        <button class="btn-dark" style="width:auto; padding:5px 10px; font-size:12px;" onclick="gerarPDFHist(${hIdx})">📄 PDF</button>
+                        <button class="btn-orange" style="width:auto; padding:5px 10px; font-size:12px;" onclick="retornarParaAprovacao(${hIdx})">↩ REABRIR</button>
+                        <button class="btn-red" style="width:auto; padding:5px 10px; font-size:12px;" onclick="if(confirm('Excluir permanentemente?')){ historico.splice(${hIdx},1); salvarNoNavegador(); renderizarTabelas(); }">🗑️ EXCLUIR</button>
+                    </div>
+                </div>`;
+                containerHist.innerHTML += histHtml;
+            });
+        }
+    }
 }
 // CERTIFIQUE-SE DE TER ESTA FUNÇÃO LOGO ABAIXO:
 function excluirItem(index) {
@@ -641,41 +670,47 @@ function excluirItem(index) {
 
 function decidirLote(idx, status) {
     const lote = itensEmAprovacao[idx];
-    let numeroPedido = "";
+    if (!lote) return;
 
-    // Solicita o número do pedido apenas se estiver aprovando
+    let numeroPedido = "";
     if (status === 'APROVADO') {
-        numeroPedido = prompt("Por favor, insira o NÚMERO DO PEDIDO para este lote:");
-        if (numeroPedido === null) return; // Cancela a operação se o usuário fechar o alerta
-        if (numeroPedido.trim() === "") numeroPedido = "N/D";
+        numeroPedido = prompt("Insira o NÚMERO DO PEDIDO:");
+        if (numeroPedido === null) return;
     }
 
+    // Cálculos de valores...
     let totais = Array(lote.fornecedoresLote.length).fill(0);
-    lote.produtos.forEach(it => it.valores.forEach((v, j) => totais[j] += (v * it.qtd)));
+    lote.produtos.forEach(it => {
+        (it.valores || []).forEach((v, j) => {
+            totais[j] += (v * (it.qtd || 0));
+        });
+    });
     
     const valsValidos = totais.filter(t => t > 0);
-    const menor = Math.min(...valsValidos);
+    const menor = valsValidos.length > 0 ? Math.min(...valsValidos) : 0;
     const idxV = totais.indexOf(menor);
 
+    if (!historico) historico = [];
+
+    // SALVANDO NO HISTÓRICO (Garantindo a Conta Contábil)
     historico.push({
         data: lote.dataEnvio, 
         cc: lote.centroCusto, 
-        vence: lote.fornecedoresLote[idxV],
+        conta: lote.contaContabil, // <-- IMPORTANTE: Verifique se este nome bate com o do lote
+        vence: idxV !== -1 ? lote.fornecedoresLote[idxV] : "N/D",
         total: `R$ ${menor.toFixed(2)}`, 
         status: status, 
         itens: lote.produtos, 
         vIdx: idxV, 
-        conta: lote.contaContabil,
-        numeroPedido: numeroPedido, // Salva o número digitado
-        fornecedoresOriginais: [...lote.fornecedoresLote]
+        numeroPedido: numeroPedido || "N/D", 
+        fornecedoresOriginais: [...lote.fornecedoresLote],
+        dataDecisao: new Date().toLocaleString('pt-BR')
     });
 
     itensEmAprovacao.splice(idx, 1);
-    salvarNoNavegador();
+    salvarNoNavegador(); 
     renderizarTabelas();
-    atualizarHistorico();
 }
-
 function atualizarHistorico() {
     const corpo = document.getElementById("tbodyHistorico");
     if(!corpo) return;
@@ -883,7 +918,13 @@ function gerarPDFListaPedido(idx) {
 function gerarPDFHist(idx) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF("p", "mm", "a4");
+    
+    // Puxa o item do histórico
     const r = historico[idx];
+    if (!r) {
+        alert("Erro: Registro de histórico não encontrado.");
+        return;
+    }
 
     // --- CABEÇALHO VERMELHO ---
     doc.setFillColor(180, 0, 0); 
@@ -891,38 +932,47 @@ function gerarPDFHist(idx) {
     
     doc.setFontSize(16);
     doc.setTextColor(255, 255, 255);
-    doc.setFont(undefined, 'bold');
+    doc.setFont("helvetica", "bold");
     doc.text("ORDEM DE COMPRA", 14, 13);
 
     // --- INFORMAÇÕES GERAIS ---
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(10);
-    doc.setFont(undefined, 'bold');
-    doc.text(`Centro de Custo: ${r.cc}`, 14, 28);
-    doc.text(`Conta Contábil: ${r.conta || 'N/A'}`, 14, 33);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Centro de Custo: ${r.cc || 'N/A'}`, 14, 28);
+    // Ajustado para 'conta' que é como salvamos no decidirLote
+    doc.text(`Conta Contábil: ${r.conta || 'N/A'}`, 14, 33); 
     
     doc.setTextColor(180, 0, 0);
     doc.text(`PEDIDO Nº: ${r.numeroPedido || 'N/D'}`, 14, 38);
 
     doc.setTextColor(0, 0, 0);
-    doc.setFont(undefined, 'normal');
+    doc.setFont("helvetica", "normal");
     doc.text(`Data: ${r.data}`, 110, 28);
 
     // --- TABELA DE ITENS ---
     doc.autoTable({ 
         startY: 45, 
         head: [['ITEM', 'PRODUTO / DESCRIÇÃO', 'QTD', 'UNITÁRIO', 'TOTAL']], 
-        body: r.itens.map((it, i) => [
-            i + 1,
-            it.p, 
-            it.qtd, 
-            `R$ ${it.valores[r.vIdx].toFixed(2)}`, 
-            `R$ ${(it.valores[r.vIdx] * it.qtd).toFixed(2)}`
-        ]),
+        body: r.itens.map((it, i) => {
+            // SEGURANÇA: Busca o valor usando o índice do vencedor salvo (vIdx)
+            const listaValores = it.valores || [];
+            const valorUnit = (typeof r.vIdx !== 'undefined' && listaValores[r.vIdx]) ? listaValores[r.vIdx] : 0;
+            const valorTotal = valorUnit * (it.qtd || 0);
+
+            return [
+                i + 1,
+                it.p, 
+                it.qtd, 
+                `R$ ${valorUnit.toFixed(2)}`, 
+                `R$ ${valorTotal.toFixed(2)}`
+            ];
+        }),
         theme: 'grid',
         styles: { fontSize: 9, cellPadding: 3, font: "helvetica" },
         headStyles: { fillColor: [180, 0, 0], textColor: [255, 255, 255] },
         didParseCell: function (data) {
+            // Limpeza de caracteres especiais para não quebrar o PDF
             if (data.cell.text && data.cell.text.length > 0) {
                 data.cell.text = data.cell.text.map(t => 
                     t.replace(/&[a-z0-9]+;/gi, '').replace(/[^\x00-\x7F\xC0-\xFF]/g, "")
@@ -938,34 +988,37 @@ function gerarPDFHist(idx) {
 
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
-    doc.setFont(undefined, 'normal');
+    doc.setFont("helvetica", "normal");
     doc.text(`Fornecedor:`, 14, finalY + 10);
+    
     doc.setTextColor(0, 150, 0); 
-    doc.setFont(undefined, 'bold');
-    doc.text(`${r.vence}`, 55, finalY + 10);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${r.vence || 'Não identificado'}`, 55, finalY + 10);
 
     doc.setTextColor(0, 0, 0);
-    doc.setFont(undefined, 'normal');
+    doc.setFont("helvetica", "normal");
     doc.text(`Total da Ordem:`, 110, finalY + 10);
-    doc.setFont(undefined, 'bold');
+    doc.setFont("helvetica", "bold");
     doc.text(`${r.total}`, 145, finalY + 10);
 
     // --- OBSERVAÇÕES FINAIS ---
     let obsY = finalY + 25;
     doc.setFontSize(9);
     doc.setTextColor(0, 0, 0);
-    doc.setFont(undefined, 'bold');
+    doc.setFont("helvetica", "bold");
     doc.text("Observações:", 14, obsY);
     
-    doc.setFont(undefined, 'normal');
+    doc.setFont("helvetica", "normal");
     doc.text("* Informamos que o Nº do Pedido precisa constar registrado na nota fiscal.", 14, obsY + 6);
     doc.text("* Solicitamos o envio da nota fiscal para os e-mails:", 14, obsY + 12);
     
-    doc.setFont(undefined, 'bold');
+    doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 0, 255);
     doc.text("tex.nascimento@pscg.com.br e operacoes@pscg.com.br", 14, obsY + 18);
 
-    doc.save(`Ordem_Pedido_${r.numeroPedido}_${r.vence}.pdf`);
+    // Salva o arquivo
+    const nomeArquivo = `Ordem_Pedido_${r.numeroPedido}_${r.vence}`.replace(/\s+/g, '_');
+    doc.save(`${nomeArquivo}.pdf`);
 }
 // --- AUXILIARES ---
 
