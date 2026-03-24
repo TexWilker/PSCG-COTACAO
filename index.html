@@ -2,10 +2,14 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>PSCG Smart Quote - Executive Version</title>
+    <title>PSCG Smart Quote - Cloud Edition</title>
 
-   	<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-	<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 20px; color: #333; }
@@ -39,24 +43,10 @@
         .lock-msg { text-align: center; padding: 40px; color: #777; font-style: italic; }
         
         .btn-del-forn { background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; padding: 2px 6px; font-size: 9px; vertical-align: middle; margin-left: 5px; }
-	/* Adicione dentro da tag <style> */
-	.btn-del-cotacao { background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 2px 6px !important; font-size: 10px !important; width: auto !import; display: inline-block; margin-left: 5px; line-height: 1;}
-	.btn-del-cotacao:hover { background: #a71d2a; }
-/* Garante que o input dentro da célula da tabela tenha largura mínima suficiente */
-td input[type="number"] {
-    width: 80px !important; /* Aumentado de 65px para 80px */
-    padding: 5px;
-    margin: 0;
-    text-align: center;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-}
-
-/* Garante que a célula (td) não corte o conteúdo */
-td {
-    white-space: nowrap; /* Impede que o texto quebre linha dentro da célula */
-    min-width: 90px;     /* Define uma largura mínima segura para as colunas de preço */
-}
+        .btn-del-cotacao { background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 2px 6px !important; font-size: 10px !important; width: auto !important; display: inline-block; margin-left: 5px; line-height: 1;}
+        
+        td input[type="number"] { width: 80px !important; padding: 5px; text-align: center; border: 1px solid #ddd; border-radius: 4px; }
+        td { white-space: nowrap; min-width: 90px; }
     </style>
 </head>
 <body>
@@ -67,7 +57,8 @@ td {
     <button class="tab active" onclick="openTab('cotacao')">📊 1. COTAÇÃO</button>
     <button class="tab" onclick="openTab('aprovacao')">⚖️ 2. APROVAÇÃO</button>
     <button class="tab" onclick="openTab('historico')">📚 3. HISTÓRICO</button>
-    <button class="tab" onclick="openTab('config')">⚙️ 4. GESTÃO</button> </div>
+    <button class="tab" onclick="openTab('config')">⚙️ 4. GESTÃO</button>
+</div>
 
 <div id="config" class="tab-content">
     <div class="box">
@@ -87,31 +78,31 @@ td {
     <div class="box">
         <div class="grid-inputs">
             <div class="box">
-    <h3>🏢 DADOS GERAIS</h3>
-    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-        <select id="centroCusto">
-            <option value="">Centro de Custo...</option>
-            <option value="Administração">Administração</option>
-            <option value="Segurança">Segurança</option>
-            <option value="Manutenção">Manutenção</option>
-            <option value="Ar Condicionado">Ar Condicionado</option>
-            <option value="Encargos Específicos">Encargos Específicos</option>
-        </select>
-        <select id="contaContabil">
-            <option value="">Conta Contábil...</option>
-            <option value="Refrigeração">Refrigeração</option>
-            <option value="Eletrica">Eletrica</option>
-            <option value="Predial">Predial</option>
-            <option value="Pintura">Pintura</option>
-            <option value="Hidraulica">Hidraulica</option>
-        </select>
-    </div>
-    <select id="fornecedorSelectBase"></select>
-    <button class="btn-blue" onclick="adicionarFornecedorNaCotacao()">+ ADICIONAR À COTAÇÃO ATUAL</button>
-    <hr>
-    <input type="file" id="importExcel" accept=".xlsx,.xls">
-    <button class="btn-blue" onclick="importarExcel()">📥 IMPORTAR ITENS EXCEL</button>
-</div>
+                <h3>🏢 DADOS GERAIS</h3>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <select id="centroCusto">
+                        <option value="">Centro de Custo...</option>
+                        <option value="Administração">Administração</option>
+                        <option value="Segurança">Segurança</option>
+                        <option value="Manutenção">Manutenção</option>
+                        <option value="Ar Condicionado">Ar Condicionado</option>
+                        <option value="Encargos Específicos">Encargos Específicos</option>
+                    </select>
+                    <select id="contaContabil">
+                        <option value="">Conta Contábil...</option>
+                        <option value="Refrigeração">Refrigeração</option>
+                        <option value="Eletrica">Eletrica</option>
+                        <option value="Predial">Predial</option>
+                        <option value="Pintura">Pintura</option>
+                        <option value="Hidraulica">Hidraulica</option>
+                    </select>
+                </div>
+                <select id="fornecedorSelectBase"></select>
+                <button class="btn-blue" onclick="adicionarFornecedorNaCotacao()">+ ADICIONAR À COTAÇÃO ATUAL</button>
+                <hr>
+                <input type="file" id="importExcel" accept=".xlsx,.xls">
+                <button class="btn-blue" onclick="importarExcel()">📥 IMPORTAR ITENS EXCEL</button>
+            </div>
             <div class="box">
                 <h3>💰 LANÇAMENTO DE VALORES</h3>
                 <select id="produtoSelect" onchange="vincularQuantidade(this.value)"></select>
@@ -121,11 +112,9 @@ td {
                 <button onclick="salvarItem()" style="margin-top:20px; background:#1a2a3a">SALVAR ITEM</button>
             </div>
         </div>
-
         <div class="box">
-            <h2>📝 MAPA DE COTAÇÃO </h2>
+            <h2>📝 MAPA DE COTAÇÃO</h2>
             <div id="tabCotacaoWrapper" style="overflow-x: auto;"></div>
-            
             <div style="margin-top: 25px;">
                 <button class="btn-gold" onclick="liberarParaAprovacao()" style="height: 60px; font-size: 18px;">🚀 ENVIAR PARA APROVAÇÃO</button>
             </div>
@@ -157,419 +146,337 @@ td {
 </div>
 
 <script>
-// --- CONFIGURAÇÃO FIREBASE ---
+// ==========================================
+// CONFIGURAÇÃO DO FIREBASE (SUBSTITUA AQUI)
+// ==========================================
 const firebaseConfig = {
-    apiKey: "AIzaSyA5R0cSqndwuNsigkHipKWnkIrZ8XnSTlI",
-    authDomain: "pscg-smart-quote-51d94.firebaseapp.com",
-    projectId: "pscg-smart-quote-51d94",
-    databaseURL: "https://pscg-smart-quote-51d94-default-rtdb.firebaseio.com",
-    storageBucket: "pscg-smart-quote-51d94.firebasestorage.app",
-    messagingSenderId: "1016561499081",
-    appId: "1:1016561499081:web:6b39395dde1ba0165f8618"
+  apiKey: "AIzaSyAZGL3_8gaYpdTvOfSpxp3IMtCQ4JxVg6Q",
+  authDomain: "pscg-smart-quote.firebaseapp.com",
+  projectId: "pscg-smart-quote",
+  storageBucket: "pscg-smart-quote.firebasestorage.app",
+  messagingSenderId: "1019995873552",
+  appId: "1:1019995873552:web:569324754ac3ed9a7b8595"
 };
 
-// Inicializar Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// --- VARIÁVEIS DE ESTADO ---
+// Variáveis de Estado
 let fornecedores = [];
 let itens = [];
-let bancoFornecedores = [];
 let historico = [];
 let itensEmAprovacao = [];
 let produtosImportados = {};
+let bancoFornecedores = [];
 
-// --- SINCRONIZAÇÃO EM TEMPO REAL (NUVEM) ---
+// INICIALIZAÇÃO E SINCRONIZAÇÃO EM TEMPO REAL
+window.onload = function() {
+    db.ref('pscg_data').on('value', (snapshot) => {
+        const data = snapshot.val() || {};
+        
+        fornecedores = data.fornecedores || [];
+        itens = data.itens || [];
+        historico = data.historico || [];
+        itensEmAprovacao = data.aprovacao || [];
+        produtosImportados = data.importados || {};
+        bancoFornecedores = data.banco_forn || [];
 
-// 1. Escutar Banco de Fornecedores (Gestão)
-db.ref('banco_fornecedores').on('value', (snapshot) => {
-    bancoFornecedores = snapshot.val() || [];
-    renderizarGestao();
-    atualizarSelectFornecedoresBase();
-});
+        atualizarInterface();
+        atualizarHistorico();
+        renderizarTabelas();
+        renderizarGestao();
+    });
+};
 
-// 2. Escutar Cotação Atual (Itens e Fornecedores selecionados)
-db.ref('cotacao_atual/itens').on('value', (snapshot) => {
-    itens = snapshot.val() || [];
-    renderizarTabelas();
-    atualizarSelectProdutos();
-});
-
-db.ref('cotacao_atual/fornecedores').on('value', (snapshot) => {
-    fornecedores = snapshot.val() || [];
-    renderizarTabelas();
-    renderizarInputsPrecos();
-});
-
-// 3. Escutar Itens em Aprovação
-db.ref('itens_em_aprovacao').on('value', (snapshot) => {
-    itensEmAprovacao = snapshot.val() || [];
-    renderizarAprovacao();
-});
-
-// 4. Escutar Histórico
-db.ref('historico').on('value', (snapshot) => {
-    historico = snapshot.val() || [];
-    renderizarHistorico();
-});
-
-// --- FUNÇÕES DE PERSISTÊNCIA NA NUVEM ---
-function salvarBancoFornecedores() {
-    db.ref('banco_fornecedores').set(bancoFornecedores);
+// SUBSTITUIÇÃO DO SALVAMENTO LOCAL PELO FIREBASE
+function salvarNoNavegador() {
+    db.ref('pscg_data').set({
+        fornecedores: fornecedores,
+        itens: itens,
+        historico: historico,
+        aprovacao: itensEmAprovacao,
+        importados: produtosImportados,
+        banco_forn: bancoFornecedores
+    }).catch(err => console.error("Erro Firebase:", err));
 }
 
-function salvarCotacaoAtual() {
-    db.ref('cotacao_atual/itens').set(itens);
-    db.ref('cotacao_atual/fornecedores').set(fornecedores);
+// --- FUNÇÕES DE LÓGICA (Mantidas do original) ---
+
+function excluirFornecedorDaCotacao(idx) {
+    if (!confirm(`Remover fornecedor da cotação?`)) return;
+    fornecedores.splice(idx, 1);
+    itens.forEach(item => item.valores.splice(idx, 1));
+    salvarNoNavegador();
 }
 
-function salvarAprovacao() {
-    db.ref('itens_em_aprovacao').set(itensEmAprovacao);
+function atualizarInterface() {
+    const containerPrecos = document.getElementById("inputsPrecos");
+    if(containerPrecos) {
+        containerPrecos.innerHTML = fornecedores.map((f, i) => 
+            `<div><label>${f}</label><input id="v${i}" type="number" step="0.01"></div>`
+        ).join("");
+    }
+
+    const nomesProds = Object.keys(produtosImportados);
+    let optProds = '<option value="">PRODUTO...</option>';
+    nomesProds.forEach(n => optProds += `<option value="${n}">${n}</option>`);
+    document.getElementById("produtoSelect").innerHTML = optProds;
+
+    const selectForn = document.getElementById("fornecedorSelectBase");
+    if(selectForn) {
+        let optForn = '<option value="">Selecione um Fornecedor Cadastrado...</option>';
+        bancoFornecedores.forEach(f => optForn += `<option value="${f}">${f}</option>`);
+        selectForn.innerHTML = optForn;
+    }
 }
 
-function salvarHistorico() {
-    db.ref('historico').set(historico);
+function vincularQuantidade(produtoNome) {
+    if (produtosImportados[produtoNome]) {
+        document.getElementById("quantidade").value = produtosImportados[produtoNome];
+    }
 }
 
-// --- FUNÇÕES DE NAVEGAÇÃO ---
-function openTab(tabId) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.getElementById(tabId).classList.add('active');
-    event.currentTarget.classList.add('active');
+function adicionarFornecedorNaCotacao() {
+    const nome = document.getElementById("fornecedorSelectBase").value;
+    if (!nome || fornecedores.includes(nome)) return;
+    fornecedores.push(nome);
+    salvarNoNavegador();
 }
 
-// --- FUNÇÕES DE GESTÃO (ABA 4) ---
 function salvarNovoFornecedorBase() {
     const nome = document.getElementById("cadFornecedorNome").value.trim().toUpperCase();
-    if (!nome) return;
-    if (bancoFornecedores.includes(nome)) return alert("Já cadastrado!");
+    if (!nome || bancoFornecedores.includes(nome)) return;
     bancoFornecedores.push(nome);
-    salvarBancoFornecedores();
+    bancoFornecedores.sort();
     document.getElementById("cadFornecedorNome").value = "";
-}
-
-function excluirFornecedorBase(idx) {
-    if (confirm("Excluir este fornecedor da base geral?")) {
-        bancoFornecedores.splice(idx, 1);
-        salvarBancoFornecedores();
-    }
+    salvarNoNavegador();
 }
 
 function renderizarGestao() {
     const corpo = document.getElementById("listaFornecedoresBase");
-    corpo.innerHTML = "";
-    bancoFornecedores.forEach((f, i) => {
-        corpo.innerHTML += `<tr><td>${f}</td><td><button class="btn-red btn-acao" onclick="excluirFornecedorBase(${i})">EXCLUIR</button></td></tr>`;
-    });
+    if(!corpo) return;
+    corpo.innerHTML = bancoFornecedores.map((f, i) => `
+        <tr>
+            <td style="text-align: left; padding-left: 20px;">${f}</td>
+            <td><button class="btn-red" style="width:auto; padding: 5px 10px" onclick="excluirFornecedorBase(${i})">Excluir</button></td>
+        </tr>
+    `).join("");
 }
 
-function atualizarSelectFornecedoresBase() {
-    const sel = document.getElementById("fornecedorSelectBase");
-    sel.innerHTML = '<option value="">Selecione um fornecedor da base...</option>';
-    bancoFornecedores.forEach(f => {
-        sel.innerHTML += `<option value="${f}">${f}</option>`;
-    });
-}
-
-// --- FUNÇÕES DE COTAÇÃO (ABA 1) ---
-function adicionarFornecedorNaCotacao() {
-    const nome = document.getElementById("fornecedorSelectBase").value;
-    if (!nome) return;
-    if (fornecedores.includes(nome)) return alert("Já está na cotação!");
-    fornecedores.push(nome);
-    itens.forEach(it => it.valores.push(0));
-    salvarCotacaoAtual();
-}
-
-function excluirFornecedorDaCotacao(idx) {
-    if (confirm("Remover fornecedor e todos os seus preços desta cotação?")) {
-        fornecedores.splice(idx, 1);
-        itens.forEach(it => it.valores.splice(idx, 1));
-        salvarCotacaoAtual();
-    }
-}
-
-function renderizarInputsPrecos() {
-    const container = document.getElementById("inputsPrecosDinâmicos");
-    container.innerHTML = "";
-    fornecedores.forEach((f, i) => {
-        container.innerHTML += `<div style="margin-bottom:10px;">
-            <label style="font-size:11px; font-weight:bold;">${f}:</label>
-            <input type="number" id="v${i}" step="0.01" placeholder="0,00">
-        </div>`;
-    });
-}
-
-function vincularQuantidade(prodNome) {
-    if (produtosImportados[prodNome]) {
-        document.getElementById("quantidade").value = produtosImportados[prodNome];
-    }
-}
-
-function atualizarSelectProdutos() {
-    const sel = document.getElementById("produtoSelect");
-    const valAtual = sel.value;
-    sel.innerHTML = '<option value="">Selecione ou digite um produto...</option>';
-    Object.keys(produtosImportados).forEach(p => {
-        sel.innerHTML += `<option value="${p}">${p}</option>`;
-    });
-    sel.value = valAtual;
+function excluirFornecedorBase(idx) {
+    if(!confirm("Remover cadastro?")) return;
+    bancoFornecedores.splice(idx, 1);
+    salvarNoNavegador();
 }
 
 function salvarItem() {
-    const p = document.getElementById("produtoSelect").value.trim();
-    const qtd = parseFloat(document.getElementById("quantidade").value) || 1;
-    const editIdx = parseInt(document.getElementById("editIndex").value);
+    const p = document.getElementById("produtoSelect").value;
+    const q = parseFloat(document.getElementById("quantidade").value);
+    const idx = parseInt(document.getElementById("editIndex").value);
+    const vals = fornecedores.map((_, i) => parseFloat(document.getElementById(`v${i}`).value) || 0);
 
-    if (!p) return alert("Informe o produto!");
-
-    const valores = fornecedores.map((_, i) => parseFloat(document.getElementById(`v${i}`).value) || 0);
-
-    if (editIdx > -1) {
-        itens[editIdx] = { p, qtd, valores };
-    } else {
-        itens.push({ p, qtd, valores });
-    }
-
-    salvarCotacaoAtual();
-    limparForm();
-}
-
-function excluirItem(idx) {
-    if (confirm("Excluir este item?")) {
-        itens.splice(idx, 1);
-        salvarCotacaoAtual();
-    }
-}
-
-function limparForm() {
-    document.getElementById("editIndex").value = "-1";
-    document.getElementById("produtoSelect").value = "";
-    document.getElementById("quantidade").value = "1";
-    fornecedores.forEach((_, i) => {
-        const input = document.getElementById(`v${i}`);
-        if (input) input.value = "";
-    });
-}
-
-function editarItem(idx) {
-    const it = itens[idx];
-    document.getElementById("editIndex").value = idx;
-    document.getElementById("produtoSelect").value = it.p;
-    document.getElementById("quantidade").value = it.qtd;
-    it.valores.forEach((v, i) => {
-        const input = document.getElementById(`v${i}`);
-        if (input) input.value = v;
-    });
-}
-
-function renderizarTabelas() {
-    const head = document.getElementById("headCotacao");
-    const body = document.getElementById("bodyCotacao");
+    if(!p || isNaN(q)) return alert("Preencha produto e quantidade!");
     
-    // Header
-    let h = `<tr><th>PRODUTO</th><th>QTD</th>`;
-    fornecedores.forEach((f, i) => {
-        h += `<th>${f} <button class="btn-del-cotacao" onclick="excluirFornecedorDaCotacao(${i})">X</button></th>`;
-    });
-    h += `<th>AÇÕES</th></tr>`;
-    head.innerHTML = h;
-
-    // Body
-    body.innerHTML = "";
-    itens.forEach((it, idx) => {
-        let r = `<tr><td>${it.p}</td><td>${it.qtd}</td>`;
-        const minVal = Math.min(...it.valores.filter(v => v > 0));
-        it.valores.forEach(v => {
-            const classe = (v === minVal && v > 0) ? "melhor" : "";
-            r += `<td class="${classe}">R$ ${(v * it.qtd).toLocaleString('pt-BR', {minimumFractionDigits:2})} <br><small>(un. R$ ${v.toFixed(2)})</small></td>`;
-        });
-        r += `<td>
-            <button class="btn-orange btn-acao" onclick="editarItem(${idx})">EDITAR</button>
-            <button class="btn-red btn-acao" onclick="excluirItem(${idx})">EXCLUIR</button>
-        </td></tr>`;
-        body.innerHTML += r;
-    });
+    if(idx === -1) itens.push({p, qtd: q, valores: vals}); 
+    else itens[idx] = {p, qtd: q, valores: vals};
     
-    calcularTotais();
+    limparCampos();
+    salvarNoNavegador();
 }
 
-function calcularTotais() {
-    const footer = document.getElementById("footerCotacao");
-    if (fornecedores.length === 0) {
-        footer.innerHTML = "";
-        return;
-    }
-
-    let totais = fornecedores.map((_, i) => itens.reduce((acc, it) => acc + (it.valores[i] * it.qtd), 0));
-    let totalEconomia = itens.reduce((acc, it) => {
-        const min = Math.min(...it.valores.filter(v => v > 0));
-        return acc + (min !== Infinity ? min * it.qtd : 0);
-    }, 0);
-
-    let h = `<tr><th colspan="2">TOTAL POR FORNECEDOR</th>`;
-    totais.forEach(t => h += `<th>R$ ${t.toLocaleString('pt-BR', {minimumFractionDigits:2})}</th>`);
-    h += `<th>-</th></tr>`;
+function liberarParaAprovacao() {
+    const cc = document.getElementById("centroCusto").value;
+    const conta = document.getElementById("contaContabil").value;
+    if(!cc || !conta || itens.length === 0) return alert("Preencha todos os dados!");
     
-    h += `<tr style="background:#e8f5e9"><th colspan="2">VALOR COM ECONOMIA APLICADA</th><th colspan="${fornecedores.length}" style="font-size:18px; color:#28a745">R$ ${totalEconomia.toLocaleString('pt-BR', {minimumFractionDigits:2})}</th><th>-</th></tr>`;
-    
-    footer.innerHTML = h;
-}
-
-// --- FUNÇÕES DE APROVAÇÃO (ABA 2) ---
-function enviarParaAprovacao() {
-    if (itens.length === 0) return alert("Não há itens!");
-    const nova = {
+    itensEmAprovacao.push({
         id: Date.now(),
-        data: new Date().toLocaleString(),
-        centro: document.getElementById("centroCusto").value,
-        conta: document.getElementById("contaContabil").value,
-        itens: JSON.parse(JSON.stringify(itens)),
-        fornecedores: JSON.parse(JSON.stringify(fornecedores))
-    };
-    itensEmAprovacao.push(nova);
-    salvarAprovacao();
+        dataEnvio: new Date().toLocaleString(),
+        centroCusto: cc,
+        contaContabil: conta,
+        fornecedoresLote: [...fornecedores], 
+        produtos: JSON.parse(JSON.stringify(itens))
+    });
     
-    // Limpa a cotação atual após enviar
-    itens = [];
-    fornecedores = [];
-    salvarCotacaoAtual();
-    
-    alert("Cotação enviada para Aprovação!");
+    itens = []; fornecedores = [];
+    salvarNoNavegador();
+    alert("🚀 Enviado para Aprovação!");
     openTab('aprovacao');
 }
 
-function renderizarAprovacao() {
-    const container = document.getElementById("listaAprovacao");
-    container.innerHTML = "";
-    if (itensEmAprovacao.length === 0) {
-        container.innerHTML = '<div class="lock-msg">Nenhuma cotação aguardando aprovação.</div>';
-        return;
+function editarNoLote(loteIdx, prodIdx, tipo, fornIdx, novoValor) {
+    const val = parseFloat(novoValor) || 0;
+    if (tipo === 'qtd') itensEmAprovacao[loteIdx].produtos[prodIdx].qtd = val;
+    else if (tipo === 'valor') itensEmAprovacao[loteIdx].produtos[prodIdx].valores[fornIdx] = val;
+    salvarNoNavegador();
+}
+
+function excluirFornecedorDoLote(loteIdx, fornIdx) {
+    if(!confirm("Remover fornecedor do lote?")) return;
+    itensEmAprovacao[loteIdx].fornecedoresLote.splice(fornIdx, 1);
+    itensEmAprovacao[loteIdx].produtos.forEach(p => p.valores.splice(fornIdx, 1));
+    salvarNoNavegador();
+}
+
+function retornarParaCotacao(loteIdx) {
+    const lote = itensEmAprovacao[loteIdx];
+    fornecedores = [...lote.fornecedoresLote];
+    itens = JSON.parse(JSON.stringify(lote.produtos));
+    document.getElementById("centroCusto").value = lote.centroCusto;
+    document.getElementById("contaContabil").value = lote.contaContabil;
+    itensEmAprovacao.splice(loteIdx, 1);
+    salvarNoNavegador();
+    openTab('cotacao');
+}
+
+function renderizarTabelas() {
+    // ABA COTAÇÃO
+    const containerCotacao = document.getElementById('tabCotacaoWrapper');
+    if (containerCotacao) {
+        if (!fornecedores.length || !itens.length) {
+            containerCotacao.innerHTML = "<p class='lock-msg'>Vazio. Adicione fornecedores e produtos.</p>";
+        } else {
+            let html = `<table><thead><tr><th rowspan="2">PRODUTO</th><th rowspan="2">QTD</th>`;
+            fornecedores.forEach((f, i) => html += `<th colspan="2">${f} <button class="btn-del-cotacao" onclick="excluirFornecedorDaCotacao(${i})">X</button></th>`);
+            html += `<th rowspan="2">AÇÕES</th></tr><tr>`;
+            fornecedores.forEach(() => html += `<th>UNIT.</th><th>TOTAL</th>`);
+            html += `</tr></thead><tbody>`;
+            itens.forEach((it, idx) => {
+                const min = Math.min(...it.valores.filter(v => v > 0));
+                html += `<tr><td style="text-align:left">${it.p}</td><td>${it.qtd}</td>`;
+                it.valores.forEach((v) => {
+                    const sub = v * it.qtd;
+                    const cls = (v === min && v > 0) ? 'melhor' : '';
+                    html += `<td class="${cls}">R$ ${v.toFixed(2)}</td><td class="${cls}">R$ ${sub.toFixed(2)}</td>`;
+                });
+                html += `<td><button onclick="editarItem(${idx})" class="btn-acao btn-blue">✏️</button><button onclick="excluirItem(${idx})" class="btn-acao btn-red">🗑️</button></td></tr>`;
+            });
+            containerCotacao.innerHTML = html + `</tbody></table>`;
+        }
     }
 
-    itensEmAprovacao.forEach((ap, idx) => {
-        let html = `<div class="box" style="border-left: 10px solid #1a2a3a;">
-            <div style="float:right">
-                <button class="btn-red btn-acao" onclick="excluirAprovacao(${idx})">DESCARTAR</button>
-            </div>
-            <strong>SOLICITAÇÃO #${ap.id}</strong><br>
-            <small>Data: ${ap.data} | Centro: ${ap.centro} | Conta: ${ap.conta}</small>
-            <table><tr><th>Produto</th><th>Qtd</th>`;
-        
-        ap.fornecedores.forEach(f => html += `<th>${f}</th>`);
-        html += `<th>VENCEDOR</th><th>APROVAR?</th></tr>`;
+    // ABA APROVAÇÃO
+    const containerAprov = document.getElementById('tabAprovacaoWrapper');
+    if (containerAprov) {
+        containerAprov.innerHTML = "";
+        itensEmAprovacao.forEach((lote, loteIdx) => {
+            let loteHtml = `<div class="box" style="border-left: 8px solid #dc3545;">
+                <h4>📦 LOTE #${loteIdx+1} | CC: ${lote.centroCusto}</h4>
+                <table><thead><tr><th rowspan="2">PRODUTO</th><th rowspan="2">QTD</th>`;
+            lote.fornecedoresLote.forEach((f, fIdx) => loteHtml += `<th colspan="2">${f} <button class="btn-del-forn" onclick="excluirFornecedorDoLote(${loteIdx}, ${fIdx})">X</button></th>`);
+            loteHtml += `</tr><tr>`;
+            lote.fornecedoresLote.forEach(() => loteHtml += `<th>UNIT.</th><th>TOTAL</th>`);
+            loteHtml += `</tr></thead><tbody>`;
+            
+            let fornecedorCompleto = Array(lote.fornecedoresLote.length).fill(true);
+            let totaisForn = Array(lote.fornecedoresLote.length).fill(0);
 
-        ap.itens.forEach((it, iIdx) => {
-            html += `<tr><td>${it.p}</td><td>${it.qtd}</td>`;
-            const validos = it.valores.map((v, i) => ({v, i, f: ap.fornecedores[i]})).filter(x => x.v > 0);
-            const vencedor = validos.length > 0 ? validos.reduce((prev, curr) => (prev.v < curr.v) ? prev : curr) : null;
-
-            ap.fornecedores.forEach((_, fIdx) => {
-                const isVenc = vencedor && fIdx === vencedor.i;
-                html += `<td class="${isVenc ? 'melhor' : ''}">R$ ${(it.valores[fIdx]*it.qtd).toFixed(2)}</td>`;
+            lote.produtos.forEach((it, pIdx) => {
+                const min = Math.min(...it.valores.filter(v => v > 0));
+                loteHtml += `<tr><td style="text-align:left">${it.p}</td><td><input type="number" value="${it.qtd}" onchange="editarNoLote(${loteIdx},${pIdx},'qtd',-1,this.value)"></td>`;
+                it.valores.forEach((v, fIdx) => {
+                    const sub = v * it.qtd; totaisForn[fIdx] += sub;
+                    if (v <= 0) fornecedorCompleto[fIdx] = false;
+                    const cls = (v === min && v > 0) ? 'melhor' : '';
+                    loteHtml += `<td class="${cls}"><input type="number" value="${v.toFixed(2)}" onchange="editarNoLote(${loteIdx},${pIdx},'valor',${fIdx},this.value)"></td><td class="${cls}">R$ ${sub.toFixed(2)}</td>`;
+                });
+                loteHtml += `</tr>`;
             });
 
-            if (vencedor) {
-                html += `<td style="font-weight:bold; color:green">${vencedor.f}</td>
-                         <td><button class="btn-green btn-acao" onclick="aprovarLote(${idx}, ${iIdx})">APROVAR</button></td>`;
-            } else {
-                html += `<td style="color:red; font-weight:bold">PENDENTE (VALOR 0)</td>
-                         <td><button class="btn-dark btn-acao" disabled title="Valor Zero Detectado">BLOQUEADO</button></td>`;
-            }
-            html += `</tr>`;
+            const valsValidos = totaisForn.filter((t, idx) => t > 0 && fornecedorCompleto[idx]);
+            const menor = valsValidos.length > 0 ? Math.min(...valsValidos) : 0;
+            const idxV = totaisForn.indexOf(menor);
+            const temVencedorReal = valsValidos.length > 0;
+
+            loteHtml += `</tbody></table>
+            <div style="margin-top:15px">
+                🏆 Vencedor: <strong>${temVencedorReal ? lote.fornecedoresLote[idxV] : "AGUARDANDO"}</strong> | Valor: <strong>R$ ${menor.toFixed(2)}</strong><br><br>
+                <button class="btn-orange" style="width:auto" onclick="gerarPDFMapaLote(${loteIdx})">📄 MAPA</button>
+                <button class="btn-blue" style="width:auto" onclick="${temVencedorReal ? `decidirLote(${loteIdx},'APROVADO')` : `alert('Preços incompletos')`}">✔ APROVAR</button>
+                <button class="btn-dark" style="width:auto" onclick="retornarParaCotacao(${loteIdx})">↩ EDITAR</button>
+            </div></div>`;
+            containerAprov.innerHTML += loteHtml;
         });
-        html += `</table></div>`;
-        container.innerHTML += html;
-    });
-}
-
-function aprovarLote(apIdx, itemIdx) {
-    const ap = itensEmAprovacao[apIdx];
-    const it = ap.itens[itemIdx];
-    
-    const validos = it.valores.map((v, i) => ({v, i, f: ap.fornecedores[i]})).filter(x => x.v > 0);
-    const vencedor = validos.reduce((prev, curr) => (prev.v < curr.v) ? prev : curr);
-
-    const registro = {
-        data: new Date().toLocaleString(),
-        produto: it.p,
-        qtd: it.qtd,
-        valorTotal: vencedor.v * it.qtd,
-        fornecedor: vencedor.f,
-        centro: ap.centro,
-        conta: ap.conta
-    };
-
-    historico.push(registro);
-    salvarHistorico();
-
-    ap.itens.splice(itemIdx, 1);
-    if (ap.itens.length === 0) itensEmAprovacao.splice(apIdx, 1);
-    
-    salvarAprovacao();
-    alert("Item aprovado e enviado para o Histórico!");
-}
-
-function excluirAprovacao(idx) {
-    if (confirm("Descartar esta solicitação inteira?")) {
-        itensEmAprovacao.splice(idx, 1);
-        salvarAprovacao();
     }
 }
 
-// --- FUNÇÕES DE HISTÓRICO (ABA 3) ---
-function renderizarHistorico() {
-    const body = document.getElementById("bodyHistorico");
-    body.innerHTML = "";
-    historico.slice().reverse().forEach(h => {
-        body.innerHTML += `<tr>
-            <td>${h.data}</td>
-            <td>${h.produto}</td>
-            <td>${h.qtd}</td>
-            <td>${h.fornecedor}</td>
-            <td>R$ ${h.valorTotal.toLocaleString('pt-BR', {minimumFractionDigits:2})}</td>
-            <td>${h.centro}</td>
-            <td>${h.conta}</td>
-        </tr>`;
-    });
+function excluirItem(index) {
+    if (confirm("Excluir item?")) { itens.splice(index, 1); salvarNoNavegador(); }
 }
 
-function limparHistorico() {
-    if (confirm("Isso apagará TODO o histórico na nuvem. Confirmar?")) {
-        historico = [];
-        salvarHistorico();
+function decidirLote(idx, status) {
+    const lote = itensEmAprovacao[idx];
+    let num = prompt("Número do Pedido:");
+    if (num === null) return;
+
+    let totais = Array(lote.fornecedoresLote.length).fill(0);
+    lote.produtos.forEach(it => it.valores.forEach((v, j) => totais[j] += (v * it.qtd)));
+    const menor = Math.min(...totais.filter(t => t > 0));
+    const idxV = totais.indexOf(menor);
+
+    historico.push({
+        data: lote.dataEnvio, cc: lote.centroCusto, vence: lote.fornecedoresLote[idxV],
+        total: `R$ ${menor.toFixed(2)}`, status: status, itens: lote.produtos, 
+        vIdx: idxV, conta: lote.contaContabil, numeroPedido: num,
+        fornecedoresOriginais: [...lote.fornecedoresLote]
+    });
+    itensEmAprovacao.splice(idx, 1);
+    salvarNoNavegador();
+}
+
+function atualizarHistorico() {
+    const corpo = document.getElementById("tbodyHistorico");
+    if(!corpo) return;
+    corpo.innerHTML = historico.map((r, i) => 
+        `<tr><td>${r.data}</td><td>${r.cc}</td><td>${r.vence}</td><td>${r.total}</td><td>${r.status}</td>
+        <td><button onclick="gerarPDFHist(${i})" class="btn-dark" style="width:auto">📄</button></td></tr>`
+    ).join("");
+}
+
+// PDF Functions (Simplificadas para o exemplo, mantendo sua lógica original)
+function gerarPDFMapaLote(idx) { 
+    const { jsPDF } = window.jspdf; const doc = new jsPDF("l", "mm", "a4"); 
+    doc.text(`MAPA DE COTAÇÃO - LOTE #${idx+1}`, 15, 15);
+    doc.autoTable({ html: document.querySelectorAll('#tabAprovacaoWrapper table')[idx], startY: 25 });
+    doc.save(`Mapa_${idx+1}.pdf`);
+}
+
+function gerarPDFHist(idx) {
+    const { jsPDF } = window.jspdf; const doc = new jsPDF("p", "mm", "a4");
+    const r = historico[idx];
+    doc.text(`PEDIDO: ${r.numeroPedido} - ${r.vence}`, 15, 15);
+    doc.autoTable({ head: [['Item', 'Qtd', 'Total']], body: r.itens.map(it => [it.p, it.qtd, `R$ ${(it.valores[r.vIdx]*it.qtd).toFixed(2)}`]), startY: 25 });
+    doc.save(`Pedido_${r.numeroPedido}.pdf`);
+}
+
+function openTab(name) {
+    document.querySelectorAll('.tab-content, .tab').forEach(el => el.classList.remove('active'));
+    document.getElementById(name).classList.add('active');
+    if(name === 'cotacao') document.querySelectorAll('.tab')[0].classList.add('active');
+    if(name === 'aprovacao') {
+        document.querySelectorAll('.tab')[1].classList.add('active');
+        const show = itensEmAprovacao.length > 0;
+        document.getElementById('lockScreen').style.display = show ? 'none' : 'block';
+        document.getElementById('aprovContent').style.display = show ? 'block' : 'none';
     }
+    if(name === 'historico') document.querySelectorAll('.tab')[2].classList.add('active');
+    if(name === 'config') document.querySelectorAll('.tab')[3].classList.add('active');
+    renderizarTabelas();
 }
 
-// --- EXPORTAÇÃO E PDF ---
-function gerarPDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('l', 'mm', 'a4');
-    
-    doc.setFontSize(18);
-    doc.text("MAPA DE COTAÇÃO - PSCG SMART QUOTE", 14, 20);
-    
-    doc.setFontSize(10);
-    doc.text(`Centro: ${document.getElementById("centroCusto").value} | Conta: ${document.getElementById("contaContabil").value}`, 14, 28);
+function limparCampos() { 
+    document.getElementById("editIndex").value = "-1"; 
+    document.getElementById("produtoSelect").value = ""; 
+    document.getElementById("quantidade").value = "1"; 
+    fornecedores.forEach((_, i) => { if(document.getElementById(`v${i}`)) document.getElementById(`v${i}`).value = ""; });
+}
 
-    const headers = [["PRODUTO", "QTD", ...fornecedores]];
-    const rows = itens.map(it => [
-        it.p, 
-        it.qtd, 
-        ...it.valores.map(v => `R$ ${(v * it.qtd).toFixed(2)}`)
-    ]);
-
-    doc.autoTable({
-        startY: 35,
-        head: headers,
-        body: rows,
-        theme: 'grid',
-        headStyles: { fillColor: [26, 42, 58] }
-    });
-
-    doc.save(`Cotacao_${Date.now()}.pdf`);
+function editarItem(idx) {
+    const it = itens[idx]; 
+    document.getElementById("editIndex").value = idx; 
+    document.getElementById("produtoSelect").value = it.p; 
+    document.getElementById("quantidade").value = it.qtd;
+    it.valores.forEach((v, i) => { if(document.getElementById(`v${i}`)) document.getElementById(`v${i}`).value = v; });
 }
 
 function importarExcel() {
@@ -580,15 +487,14 @@ function importarExcel() {
         const data = new Uint8Array(e.target.result);
         const wb = XLSX.read(data, { type: 'array' });
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        
         produtosImportados = {}; 
         rows.forEach(r => {
             const nome = String(r.Produto || r.Item || r.PRODUTO || "").trim();
             const qtd = parseFloat(r.Quantidade || r.Qtd || r.QTD || 1);
             if (nome) produtosImportados[nome] = qtd;
         });
-        atualizarSelectProdutos();
-        alert("Itens importados! Selecione-os no campo de produto.");
+        salvarNoNavegador();
+        alert("✅ Itens carregados!");
     };
     reader.readAsArrayBuffer(file);
 }
