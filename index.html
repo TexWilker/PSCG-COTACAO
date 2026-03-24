@@ -1,3 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>PSCG Smart Quote - Executive Version</title>
+
+   	<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+	<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 20px; color: #333; }
+        h1, h2, h3 { background: #1a2a3a; color: #fff; padding: 15px; border-radius: 6px; margin-top: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .box { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e1e4e8; }
+        
+        .tab-container { display: flex; gap: 4px; margin-bottom: -1px; }
+        .tab { padding: 12px 25px; cursor: pointer; background: #cbd3da; border-radius: 8px 8px 0 0; font-weight: bold; border: none; transition: 0.3s; color: #444; }
+        .tab.active { background: #1a2a3a; color: white; }
+        .tab-content { display: none; border-top: 5px solid #1a2a3a; }
+        .tab-content.active { display: block; }
+
+        input, select, button, textarea { padding: 12px; width: 100%; margin-top: 10px; border: 1px solid #cbd3da; border-radius: 5px; box-sizing: border-box; font-size: 14px; }
+        button { background: #28a745; color: #fff; border: none; cursor: pointer; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+        button:hover { filter: brightness(0.9); }
+        
+        .btn-blue { background: #007bff; }
+        .btn-orange { background: #fd7e14; }
+        .btn-red { background: #dc3545; }
+        .btn-dark { background: #343a40; }
+        .btn-purple { background: #6f42c1; }
+        .btn-gold { background: #990000; color: white; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #dee2e6; padding: 12px; text-align: center; }
+        th { background: #f8f9fa; color: #1a2a3a; font-weight: 700; text-transform: uppercase; font-size: 11px; }
+        .melhor { background: #c3e6cb !important; font-weight: bold; color: #155724; }
+        
+        .grid-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .btn-acao { width: auto; padding: 6px 10px; margin: 2px; border-radius: 4px; border: none; cursor: pointer; }
+        .lock-msg { text-align: center; padding: 40px; color: #777; font-style: italic; }
+        
+        .btn-del-forn { background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; padding: 2px 6px; font-size: 9px; vertical-align: middle; margin-left: 5px; }
+	/* Adicione dentro da tag <style> */
+	.btn-del-cotacao { background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 2px 6px !important; font-size: 10px !important; width: auto !import; display: inline-block; margin-left: 5px; line-height: 1;}
+	.btn-del-cotacao:hover { background: #a71d2a; }
+/* Garante que o input dentro da célula da tabela tenha largura mínima suficiente */
+td input[type="number"] {
+    width: 80px !important; /* Aumentado de 65px para 80px */
+    padding: 5px;
+    margin: 0;
+    text-align: center;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* Garante que a célula (td) não corte o conteúdo */
+td {
+    white-space: nowrap; /* Impede que o texto quebre linha dentro da célula */
+    min-width: 90px;     /* Define uma largura mínima segura para as colunas de preço */
+}
+    </style>
+</head>
+<body>
+
+<h1>📦 PSCG Smart Quote</h1>
+
+<div class="tab-container">
+    <button class="tab active" onclick="openTab('cotacao')">📊 1. COTAÇÃO</button>
+    <button class="tab" onclick="openTab('aprovacao')">⚖️ 2. APROVAÇÃO</button>
+    <button class="tab" onclick="openTab('historico')">📚 3. HISTÓRICO</button>
+    <button class="tab" onclick="openTab('config')">⚙️ 4. GESTÃO</button> </div>
+
+<div id="config" class="tab-content">
+    <div class="box">
+        <h3>🏢 CADASTRO DE FORNECEDORES</h3>
+        <div style="display: flex; gap: 10px;">
+            <input id="cadFornecedorNome" placeholder="Nome da Empresa/Fornecedor">
+            <button onclick="salvarNovoFornecedorBase()" style="width: 200px;">CADASTRAR</button>
+        </div>
+        <table style="margin-top: 20px;">
+            <thead><tr><th>NOME DO FORNECEDOR</th><th>AÇÃO</th></tr></thead>
+            <tbody id="listaFornecedoresBase"></tbody>
+        </table>
+    </div>
+</div>
+
+<div id="cotacao" class="tab-content active">
+    <div class="box">
+        <div class="grid-inputs">
+            <div class="box">
+    <h3>🏢 DADOS GERAIS</h3>
+    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+        <select id="centroCusto">
+            <option value="">Centro de Custo...</option>
+            <option value="Administração">Administração</option>
+            <option value="Segurança">Segurança</option>
+            <option value="Manutenção">Manutenção</option>
+            <option value="Ar Condicionado">Ar Condicionado</option>
+            <option value="Encargos Específicos">Encargos Específicos</option>
+        </select>
+        <select id="contaContabil">
+            <option value="">Conta Contábil...</option>
+            <option value="Refrigeração">Refrigeração</option>
+            <option value="Eletrica">Eletrica</option>
+            <option value="Predial">Predial</option>
+            <option value="Pintura">Pintura</option>
+            <option value="Hidraulica">Hidraulica</option>
+        </select>
+    </div>
+    <select id="fornecedorSelectBase"></select>
+    <button class="btn-blue" onclick="adicionarFornecedorNaCotacao()">+ ADICIONAR À COTAÇÃO ATUAL</button>
+    <hr>
+    <input type="file" id="importExcel" accept=".xlsx,.xls">
+    <button class="btn-blue" onclick="importarExcel()">📥 IMPORTAR ITENS EXCEL</button>
+</div>
+            <div class="box">
+                <h3>💰 LANÇAMENTO DE VALORES</h3>
+                <select id="produtoSelect" onchange="vincularQuantidade(this.value)"></select>
+                <input id="quantidade" type="number" value="1">
+                <div id="inputsPrecos" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px"></div>
+                <input type="hidden" id="editIndex" value="-1">
+                <button onclick="salvarItem()" style="margin-top:20px; background:#1a2a3a">SALVAR ITEM</button>
+            </div>
+        </div>
+
+        <div class="box">
+            <h2>📝 MAPA DE COTAÇÃO </h2>
+            <div id="tabCotacaoWrapper" style="overflow-x: auto;"></div>
+            
+            <div style="margin-top: 25px;">
+                <button class="btn-gold" onclick="liberarParaAprovacao()" style="height: 60px; font-size: 18px;">🚀 ENVIAR PARA APROVAÇÃO</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="aprovacao" class="tab-content">
+    <div class="box">
+        <h3>⚖️ PAINEL DE APROVAÇÕES</h3>
+        <div id="lockScreen" class="lock-msg">
+            <h2>🔒 Aguardando Liberação</h2>
+            <p>Conclua o preenchimento na aba de Cotação e envie para análise.</p>
+        </div>
+        <div id="aprovContent" style="display:none">
+            <div id="tabAprovacaoWrapper"></div>
+        </div>
+    </div>
+</div>
+
+<div id="historico" class="tab-content">
+    <div class="box">
+        <h3>📚 HISTÓRICO DE COTAÇÕES</h3>
+        <table>
+            <thead><tr><th>DATA</th><th>CC</th><th>FORNECEDOR</th><th>TOTAL</th><th>STATUS</th><th>AÇÃO</th></tr></thead>
+            <tbody id="tbodyHistorico"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
 // --- CONFIGURAÇÃO FIREBASE ---
 const firebaseConfig = {
     apiKey: "AIzaSyA5R0cSqndwuNsigkHipKWnkIrZ8XnSTlI",
@@ -433,3 +592,6 @@ function importarExcel() {
     };
     reader.readAsArrayBuffer(file);
 }
+</script>
+</body>
+</html>
