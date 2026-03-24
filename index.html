@@ -5,8 +5,8 @@
     <title>PSCG Smart Quote - Executive Version</title>
 
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
-
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 20px; color: #333; }
         h1, h2, h3 { background: #1a2a3a; color: #fff; padding: 15px; border-radius: 6px; margin-top: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
@@ -217,7 +217,51 @@ function salvarNoNavegador() {
         console.log("Sincronizado na Nuvem!");
     }).catch(err => console.error("Erro ao salvar:", err));
 }
+function importarExcel() {
+    const file = document.getElementById("importExcel").files[0];
+    if (!file) {
+        alert("Por favor, selecione um arquivo Excel primeiro.");
+        return;
+    }
 
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const wb = XLSX.read(data, { type: 'array' });
+            const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+            
+            let novosProdutos = {}; 
+            
+          rows.forEach(r => {
+    		let nome = String(r.Produto || r.Item || r.PRODUTO || "").trim();
+   	 // Garante que a quantidade seja um número
+    		const qtd = parseFloat(r.Quantidade || r.Qtd || r.QTD || r.Reserva || 1);
+    
+   		 if (nome) {
+        		const nomeLimpo = nome.replace(/[\.\#\$\/\[\]]/g, " - ");
+        		novosProdutos[nomeLimpo] = qtd; // Aqui guardamos o NOME e a QUANTIDADE
+    }
+});
+
+            // SALVA NO FIREBASE
+            db.ref('pscg_importados').set(novosProdutos)
+                .then(() => {
+                    produtosImportados = novosProdutos;
+                    atualizarInterface();
+                    alert("✅ Importado com sucesso! Caracteres especiais foram corrigidos.");
+                })
+                .catch((error) => {
+                    console.error("Erro Firebase:", error);
+                    alert("Erro ao salvar: " + error.message);
+                });
+
+        } catch (err) {
+            alert("Erro ao processar: " + err.message);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
 // 4. CADASTRO DE FORNECEDOR (CORRIGIDO)
 function salvarNovoFornecedorBase() {
     const input = document.getElementById("cadFornecedorNome");
@@ -249,6 +293,18 @@ function atualizarInterface() {
         selForn.innerHTML = '<option value="">Selecione da base...</option>';
         bancoFornecedores.forEach(f => {
             selForn.innerHTML += `<option value="${f}">${f}</option>`;
+// Adicione este "ouvinte" para detectar quando o usuário escolhe um produto
+document.getElementById("produtoSelect").addEventListener("change", function() {
+    const produtoSelecionado = this.value;
+    const campoQuantidade = document.getElementById("quantidade");
+
+    if (produtoSelecionado && produtosImportados[produtoSelecionado]) {
+        // Puxa a quantidade da planilha que está guardada em produtosImportados
+        campoQuantidade.value = produtosImportados[produtoSelecionado];
+    } else {
+        campoQuantidade.value = 1; // Valor padrão caso não encontre
+    }
+});
         });
     }
 }
@@ -911,26 +967,6 @@ function editarItem(idx) {
     it.valores.forEach((v, i) => { if(document.getElementById(`v${i}`)) document.getElementById(`v${i}`).value = v; });
 }
 
-function importarExcel() {
-    const file = document.getElementById("importExcel").files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, { type: 'array' });
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        produtosImportados = {}; 
-        rows.forEach(r => {
-            const nome = String(r.Produto || r.Item || r.PRODUTO || "").trim();
-            const qtd = parseFloat(r.Quantidade || r.Qtd || r.QTD || 1);
-            if (nome) produtosImportados[nome] = qtd;
-        });
-        atualizarInterface();
-        salvarNoNavegador();
-        alert("✅ Itens carregados!");
-    };
-    reader.readAsArrayBuffer(file);
-}
 </script>
 </body>
 </html>
