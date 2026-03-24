@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>PSCG Smart Quote - Executive Version</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 20px; color: #333; }
+        h1, h2, h3 { background: #1a2a3a; color: #fff; padding: 15px; border-radius: 6px; margin-top: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .box { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e1e4e8; }
+        
+        .tab-container { display: flex; gap: 4px; margin-bottom: -1px; }
+        .tab { padding: 12px 25px; cursor: pointer; background: #cbd3da; border-radius: 8px 8px 0 0; font-weight: bold; border: none; transition: 0.3s; color: #444; }
+        .tab.active { background: #1a2a3a; color: white; }
+        .tab-content { display: none; border-top: 5px solid #1a2a3a; }
+        .tab-content.active { display: block; }
+
+        input, select, button, textarea { padding: 12px; width: 100%; margin-top: 10px; border: 1px solid #cbd3da; border-radius: 5px; box-sizing: border-box; font-size: 14px; }
+        button { background: #28a745; color: #fff; border: none; cursor: pointer; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+        button:hover { filter: brightness(0.9); }
+        
+        .btn-blue { background: #007bff; }
+        .btn-orange { background: #fd7e14; }
+        .btn-red { background: #dc3545; }
+        .btn-dark { background: #343a40; }
+        .btn-purple { background: #6f42c1; }
+        .btn-gold { background: #990000; color: white; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #dee2e6; padding: 12px; text-align: center; }
+        th { background: #f8f9fa; color: #1a2a3a; font-weight: 700; text-transform: uppercase; font-size: 11px; }
+        .melhor { background: #c3e6cb !important; font-weight: bold; color: #155724; }
+        
+        .grid-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .btn-acao { width: auto; padding: 6px 10px; margin: 2px; border-radius: 4px; border: none; cursor: pointer; }
+        .lock-msg { text-align: center; padding: 40px; color: #777; font-style: italic; }
+        
+        .btn-del-forn { background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; padding: 2px 6px; font-size: 9px; vertical-align: middle; margin-left: 5px; }
+	/* Adicione dentro da tag <style> */
+	.btn-del-cotacao { background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 2px 6px !important; font-size: 10px !important; width: auto !import; display: inline-block; margin-left: 5px; line-height: 1;}
+	.btn-del-cotacao:hover { background: #a71d2a; }
+/* Garante que o input dentro da célula da tabela tenha largura mínima suficiente */
+td input[type="number"] {
+    width: 80px !important; /* Aumentado de 65px para 80px */
+    padding: 5px;
+    margin: 0;
+    text-align: center;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* Garante que a célula (td) não corte o conteúdo */
+td {
+    white-space: nowrap; /* Impede que o texto quebre linha dentro da célula */
+    min-width: 90px;     /* Define uma largura mínima segura para as colunas de preço */
+}
+    </style>
+</head>
+<body>
+
+<h1>📦 PSCG Smart Quote</h1>
+
+<div class="tab-container">
+    <button class="tab active" onclick="openTab('cotacao')">📊 1. COTAÇÃO</button>
+    <button class="tab" onclick="openTab('aprovacao')">⚖️ 2. APROVAÇÃO</button>
+    <button class="tab" onclick="openTab('historico')">📚 3. HISTÓRICO</button>
+    <button class="tab" onclick="openTab('config')">⚙️ 4. GESTÃO</button> </div>
+
+<div id="config" class="tab-content">
+    <div class="box">
+        <h3>🏢 CADASTRO DE FORNECEDORES</h3>
+        <div style="display: flex; gap: 10px;">
+            <input id="cadFornecedorNome" placeholder="Nome da Empresa/Fornecedor">
+            <button onclick="salvarNovoFornecedorBase()" style="width: 200px;">CADASTRAR</button>
+        </div>
+        <table style="margin-top: 20px;">
+            <thead><tr><th>NOME DO FORNECEDOR</th><th>AÇÃO</th></tr></thead>
+            <tbody id="listaFornecedoresBase"></tbody>
+        </table>
+    </div>
+</div>
+
+<div id="cotacao" class="tab-content active">
+    <div class="box">
+        <div class="grid-inputs">
+            <div class="box">
+    <h3>🏢 DADOS GERAIS</h3>
+    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+        <select id="centroCusto">
+            <option value="">Centro de Custo...</option>
+            <option value="Administração">Administração</option>
+            <option value="Segurança">Segurança</option>
+            <option value="Manutenção">Manutenção</option>
+            <option value="Ar Condicionado">Ar Condicionado</option>
+            <option value="Encargos Específicos">Encargos Específicos</option>
+        </select>
+        <select id="contaContabil">
+            <option value="">Conta Contábil...</option>
+            <option value="Refrigeração">Refrigeração</option>
+            <option value="Eletrica">Eletrica</option>
+            <option value="Predial">Predial</option>
+            <option value="Pintura">Pintura</option>
+            <option value="Hidraulica">Hidraulica</option>
+        </select>
+    </div>
+    <select id="fornecedorSelectBase"></select>
+    <button class="btn-blue" onclick="adicionarFornecedorNaCotacao()">+ ADICIONAR À COTAÇÃO ATUAL</button>
+    <hr>
+    <input type="file" id="importExcel" accept=".xlsx,.xls">
+    <button class="btn-blue" onclick="importarExcel()">📥 IMPORTAR ITENS EXCEL</button>
+</div>
+            <div class="box">
+                <h3>💰 LANÇAMENTO DE VALORES</h3>
+                <select id="produtoSelect" onchange="vincularQuantidade(this.value)"></select>
+                <input id="quantidade" type="number" value="1">
+                <div id="inputsPrecos" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px"></div>
+                <input type="hidden" id="editIndex" value="-1">
+                <button onclick="salvarItem()" style="margin-top:20px; background:#1a2a3a">SALVAR ITEM</button>
+            </div>
+        </div>
+
+        <div class="box">
+            <h2>📝 MAPA DE COTAÇÃO </h2>
+            <div id="tabCotacaoWrapper" style="overflow-x: auto;"></div>
+            
+            <div style="margin-top: 25px;">
+                <button class="btn-gold" onclick="liberarParaAprovacao()" style="height: 60px; font-size: 18px;">🚀 ENVIAR PARA APROVAÇÃO</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="aprovacao" class="tab-content">
+    <div class="box">
+        <h3>⚖️ PAINEL DE APROVAÇÕES</h3>
+        <div id="lockScreen" class="lock-msg">
+            <h2>🔒 Aguardando Liberação</h2>
+            <p>Conclua o preenchimento na aba de Cotação e envie para análise.</p>
+        </div>
+        <div id="aprovContent" style="display:none">
+            <div id="tabAprovacaoWrapper"></div>
+        </div>
+    </div>
+</div>
+
+<div id="historico" class="tab-content">
+    <div class="box">
+        <h3>📚 HISTÓRICO DE COTAÇÕES</h3>
+        <table>
+            <thead><tr><th>DATA</th><th>CC</th><th>FORNECEDOR</th><th>TOTAL</th><th>STATUS</th><th>AÇÃO</th></tr></thead>
+            <tbody id="tbodyHistorico"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+// Variáveis Globais e Persistência
+let fornecedores = JSON.parse(localStorage.getItem('pscg_fornecedores')) || [];
+let itens = JSON.parse(localStorage.getItem('pscg_itens')) || [];
+let historico = JSON.parse(localStorage.getItem('pscg_historico')) || [];
+let itensEmAprovacao = JSON.parse(localStorage.getItem('pscg_aprovacao')) || [];
+let produtosImportados = JSON.parse(localStorage.getItem('pscg_importados')) || {};
+let bancoFornecedores = JSON.parse(localStorage.getItem('pscg_banco_forn')) || [];
+
+window.onload = function() {
+    atualizarInterface();
+    atualizarHistorico();
+    renderizarTabelas();
+    renderizarGestao();
+};
+
+function salvarNoNavegador() {
+    localStorage.setItem('pscg_fornecedores', JSON.stringify(fornecedores));
+    localStorage.setItem('pscg_itens', JSON.stringify(itens));
+    localStorage.setItem('pscg_historico', JSON.stringify(historico));
+    localStorage.setItem('pscg_aprovacao', JSON.stringify(itensEmAprovacao));
+    localStorage.setItem('pscg_importados', JSON.stringify(produtosImportados));
+    localStorage.setItem('pscg_banco_forn', JSON.stringify(bancoFornecedores));
+}
+
+// --- GESTÃO DE INTERFACE E ABA 1 ---
+function excluirFornecedorDaCotacao(idx) {
+    if (!confirm(`Deseja remover o fornecedor "${fornecedores[idx]}" desta cotação?`)) return;
+
+    // Remove o nome do fornecedor do array
+    fornecedores.splice(idx, 1);
+
+    // Remove os valores correspondentes a esse fornecedor em cada item já salvo
+    itens.forEach(item => {
+        item.valores.splice(idx, 1);
+    });
+
+    salvarNoNavegador();
+    atualizarInterface();
+    renderizarTabelas();
+}
+function atualizarInterface() {
+    // 1. Inputs de Preços na Aba 1
+    const containerPrecos = document.getElementById("inputsPrecos");
+    if(containerPrecos) {
+        containerPrecos.innerHTML = fornecedores.map((f, i) => 
+            `<div><label>${f}</label><input id="v${i}" type="number" step="0.01"></div>`
+        ).join("");
+    }
+
+    // 2. Select de Produtos (Importados do Excel)
+    const nomesProds = Object.keys(produtosImportados);
+    let optProds = '<option value="">PRODUTO...</option>';
+    nomesProds.forEach(n => optProds += `<option value="${n}">${n}</option>`);
+    document.getElementById("produtoSelect").innerHTML = optProds;
+
+    // 3. Select de Fornecedores Cadastrados (Banco de Dados)
+    const selectForn = document.getElementById("fornecedorSelectBase");
+    if(selectForn) {
+        let optForn = '<option value="">Selecione um Fornecedor Cadastrado...</option>';
+        bancoFornecedores.forEach(f => optForn += `<option value="${f}">${f}</option>`);
+        selectForn.innerHTML = optForn;
+    }
+}
+
+function vincularQuantidade(produtoNome) {
+    if (produtosImportados[produtoNome]) {
+        document.getElementById("quantidade").value = produtosImportados[produtoNome];
+    }
+}
+
+function adicionarFornecedorNaCotacao() {
+    const nome = document.getElementById("fornecedorSelectBase").value;
+    if (!nome) return alert("Selecione um fornecedor da lista!");
+    if (fornecedores.includes(nome)) return alert("Este fornecedor já está na cotação!");
+    
+    fornecedores.push(nome);
+    salvarNoNavegador();
+    atualizarInterface();
+    renderizarTabelas();
+}
+
+// --- GESTÃO PERMANENTE DE FORNECEDORES (ABA 4) ---
+
+function salvarNovoFornecedorBase() {
+    const nome = document.getElementById("cadFornecedorNome").value.trim().toUpperCase();
+    if (!nome) return alert("Digite um nome!");
+    if (bancoFornecedores.includes(nome)) return alert("Fornecedor já cadastrado!");
+    
+    bancoFornecedores.push(nome);
+    bancoFornecedores.sort();
+    salvarNoNavegador();
+    document.getElementById("cadFornecedorNome").value = "";
+    renderizarGestao();
+    atualizarInterface();
+}
+
+function renderizarGestao() {
+    const corpo = document.getElementById("listaFornecedoresBase");
+    if(!corpo) return;
+    corpo.innerHTML = bancoFornecedores.map((f, i) => `
+        <tr>
+            <td style="text-align: left; padding-left: 20px;">${f}</td>
+            <td><button class="btn-red" style="width:auto; padding: 5px 10px" onclick="excluirFornecedorBase(${i})">Excluir</button></td>
+        </tr>
+    `).join("");
+}
+
+function excluirFornecedorBase(idx) {
+    if(!confirm("Remover do cadastro permanente?")) return;
+    bancoFornecedores.splice(idx, 1);
+    salvarNoNavegador();
+    renderizarGestao();
+    atualizarInterface();
+}
+
+// --- LÓGICA DE COTAÇÃO E ITENS ---
+
+function salvarItem() {
+    const p = document.getElementById("produtoSelect").value;
+    const q = parseFloat(document.getElementById("quantidade").value);
+    const idx = parseInt(document.getElementById("editIndex").value);
+    const vals = fornecedores.map((_, i) => parseFloat(document.getElementById(`v${i}`).value) || 0);
+
+    if(!p || isNaN(q)) return alert("Preencha produto e quantidade!");
+    
+    if(idx === -1) itens.push({p, qtd: q, valores: vals}); 
+    else itens[idx] = {p, qtd: q, valores: vals};
+    
+    salvarNoNavegador();
+    limparCampos(); 
+    renderizarTabelas(); 
+}
+
+function liberarParaAprovacao() {
+    const cc = document.getElementById("centroCusto").value;
+    const conta = document.getElementById("contaContabil").value;
+    if(!cc || !conta || itens.length === 0) return alert("Preencha CC, Conta e adicione itens!");
+    
+    itensEmAprovacao.push({
+        id: Date.now(),
+        dataEnvio: new Date().toLocaleString(),
+        centroCusto: cc,
+        contaContabil: conta,
+        fornecedoresLote: [...fornecedores], 
+        produtos: JSON.parse(JSON.stringify(itens))
+    });
+    
+    itens = []; fornecedores = [];
+    salvarNoNavegador();
+    atualizarInterface();
+    alert("🚀 Enviado para Aprovação!");
+    openTab('aprovacao');
+}
+
+// --- FUNÇÕES DE EDIÇÃO NA ABA DE APROVAÇÃO (CORREÇÃO) ---
+
+function editarNoLote(loteIdx, prodIdx, tipo, fornIdx, novoValor) {
+    const val = parseFloat(novoValor) || 0;
+    if (tipo === 'qtd') {
+        itensEmAprovacao[loteIdx].produtos[prodIdx].qtd = val;
+    } else if (tipo === 'valor') {
+        itensEmAprovacao[loteIdx].produtos[prodIdx].valores[fornIdx] = val;
+    }
+    salvarNoNavegador();
+    renderizarTabelas();
+}
+
+function excluirFornecedorDoLote(loteIdx, fornIdx) {
+    if(!confirm("Remover este fornecedor deste mapa específico?")) return;
+    itensEmAprovacao[loteIdx].fornecedoresLote.splice(fornIdx, 1);
+    itensEmAprovacao[loteIdx].produtos.forEach(p => p.valores.splice(fornIdx, 1));
+    salvarNoNavegador();
+    renderizarTabelas();
+}
+
+function retornarParaCotacao(loteIdx) {
+    if (!confirm("Deseja retornar este lote para edição na aba 1?")) return;
+    const lote = itensEmAprovacao[loteIdx];
+    fornecedores = [...lote.fornecedoresLote];
+    itens = JSON.parse(JSON.stringify(lote.produtos));
+    document.getElementById("centroCusto").value = lote.centroCusto;
+    document.getElementById("contaContabil").value = lote.contaContabil;
+    itensEmAprovacao.splice(loteIdx, 1);
+    salvarNoNavegador();
+    atualizarInterface();
+    openTab('cotacao');
+}
+
+// --- ABA DE APROVAÇÃO E CÁLCULOS ---
+
+function renderizarTabelas() {
+    // --- RENDERIZAÇÃO DA ABA 1 (COTAÇÃO) ---
+    const containerCotacao = document.getElementById('tabCotacaoWrapper');
+    if (containerCotacao) {
+        if (!fornecedores.length || !itens.length) {
+            containerCotacao.innerHTML = "<p class='lock-msg'>Vazio. Adicione fornecedores e produtos para visualizar o mapa.</p>";
+        } else {
+            let html = `<table><thead><tr><th rowspan="2">PRODUTO</th><th rowspan="2">QTD</th>`;
+            fornecedores.forEach((f, i) => {
+                html += `<th colspan="2">${f} <button class="btn-del-cotacao" onclick="excluirFornecedorDaCotacao(${i})">X</button></th>`;
+            });
+            html += `<th rowspan="2" style="width:100px">AÇÕES</th></tr><tr>`;
+            fornecedores.forEach(() => html += `<th>UNIT.</th><th>TOTAL</th>`);
+            html += `</tr></thead><tbody>`;
+
+            itens.forEach((it, idx) => {
+                const min = Math.min(...it.valores.filter(v => v > 0));
+                html += `<tr><td style="text-align:left">${it.p}</td><td>${it.qtd}</td>`;
+                it.valores.forEach((v) => {
+                    const sub = v * it.qtd;
+                    const cls = (v === min && v > 0) ? 'melhor' : '';
+                    html += `<td class="${cls}">R$ ${v.toFixed(2)}</td><td class="${cls}">R$ ${sub.toFixed(2)}</td>`;
+                });
+                html += `<td style="display:flex; gap:5px; justify-content:center; border:none">
+                    <button onclick="editarItem(${idx})" class="btn-acao btn-blue" title="Editar">✏️</button>
+                    <button onclick="excluirItem(${idx})" class="btn-acao btn-red" title="Excluir">🗑️</button>
+                </td></tr>`;
+            });
+            html += `</tbody></table>`;
+            containerCotacao.innerHTML = html;
+        }
+    }
+
+    // --- RENDERIZAÇÃO DA ABA 2 (APROVAÇÃO) ---
+    const containerAprov = document.getElementById('tabAprovacaoWrapper');
+    if (containerAprov) {
+        containerAprov.innerHTML = "";
+        itensEmAprovacao.forEach((lote, loteIdx) => {
+            let loteHtml = `<div class="box" style="border-left: 8px solid #dc3545;">
+                <div style="display:flex; justify-content:space-between; align-items:center">
+                    <h4>📦 LOTE #${loteIdx+1} | CC: ${lote.centroCusto} | CONTA: ${lote.contaContabil}</h4>
+                    <span style="font-size:12px; color:#666">${lote.dataEnvio}</span>
+                </div>
+                <table><thead><tr><th rowspan="2">PRODUTO</th><th rowspan="2">QTD</th>`;
+            
+            lote.fornecedoresLote.forEach((f, fIdx) => {
+                loteHtml += `<th colspan="2">${f} <button class="btn-del-forn" onclick="excluirFornecedorDoLote(${loteIdx}, ${fIdx})">X</button></th>`;
+            });
+            loteHtml += `</tr><tr>`;
+            lote.fornecedoresLote.forEach(() => loteHtml += `<th>UNIT.</th><th>TOTAL</th>`);
+            loteHtml += `</tr></thead><tbody>`;
+            
+            // LÓGICA DE VALIDAÇÃO: Criamos um rastreador para fornecedores com itens zerados
+            let fornecedorCompleto = Array(lote.fornecedoresLote.length).fill(true);
+            let totaisForn = Array(lote.fornecedoresLote.length).fill(0);
+
+            lote.produtos.forEach((it, pIdx) => {
+                const min = Math.min(...it.valores.filter(v => v > 0));
+                loteHtml += `<tr><td style="text-align:left">${it.p}</td>
+                    <td><input type="number" value="${it.qtd}" style="width:50px" onchange="editarNoLote(${loteIdx},${pIdx},'qtd',-1,this.value)"></td>`;
+                
+                it.valores.forEach((v, fIdx) => {
+                    const sub = v * it.qtd; 
+                    totaisForn[fIdx] += sub;
+                    
+                    // Se encontrar um valor 0 ou vazio, marca o fornecedor como incompleto
+                    if (v <= 0) fornecedorCompleto[fIdx] = false;
+
+                    const cls = (v === min && v > 0) ? 'melhor' : '';
+                    loteHtml += `<td class="${cls}"><input type="number" value="${v.toFixed(2)}" style="width:80px" onchange="editarNoLote(${loteIdx},${pIdx},'valor',${fIdx},this.value)"></td>
+                                 <td class="${cls}">R$ ${sub.toFixed(2)}</td>`;
+                });
+                loteHtml += `</tr>`;
+            });
+            
+            loteHtml += `</tbody><tfoot style="background:#eee; font-weight:bold"><tr><td colspan="2" style="text-align:right">TOTAL LOTE:</td>`;
+            totaisForn.forEach(t => loteHtml += `<td colspan="2">R$ ${t.toFixed(2)}</td>`);
+            loteHtml += `</tr></tfoot></table>`;
+
+            // --- FILTRO DE VENCEDOR VÁLIDO ---
+            // Só considera fornecedores que tenham t > 0 E todos os itens preenchidos
+            const valsValidos = totaisForn.filter((t, idx) => t > 0 && fornecedorCompleto[idx]);
+            const menor = valsValidos.length > 0 ? Math.min(...valsValidos) : 0;
+            const idxV = totaisForn.indexOf(menor);
+            const temVencedorReal = valsValidos.length > 0;
+
+            // Cálculo da Economia (baseado no maior valor total vs menor valor válido)
+            const maior = Math.max(...totaisForn);
+            const econ = (maior > menor && menor > 0) ? ((maior - menor) / maior) * 100 : 0;
+
+            loteHtml += `
+            <div style="margin-top:20px; padding:15px; background:#fff; border:1px solid #ddd; border-radius:5px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px">
+                    <div>
+                        <div style="font-size:16px">🏆 Vencedor: <strong style="color:${temVencedorReal ? '#28a745' : '#dc3545'}">
+                            ${temVencedorReal ? lote.fornecedoresLote[idxV] : "AGUARDANDO PREÇOS (Existem itens com R$ 0,00)"}
+                        </strong></div>
+                        <div style="font-size:18px">💰 Valor Vencedor: <strong>R$ ${menor.toFixed(2)}</strong></div>
+                        <div style="color:#dc3545; font-size:16px; font-weight:bold; margin-top:5px">
+                            📉 Economia Gerada: ${econ.toFixed(2)}%
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:5px;">
+                        <button class="btn-orange" style="width:auto; padding:8px" onclick="gerarPDFMapaLote(${loteIdx})">📄 PDF MAPA</button>
+                        <button class="btn-purple" style="width:auto; padding:8px" onclick="gerarPDFListaPedido(${loteIdx})">📄 LISTA PEDIDO</button>
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px; border-top:1px solid #eee; padding-top:10px">
+                    <button class="btn-dark" style="background:#6c757d; width:auto" onclick="retornarParaCotacao(${loteIdx})">↩ EDITAR</button>
+                    <button class="btn-red" style="width:auto; background:#dc3545" onclick="decidirLote(${loteIdx},'REPROVADO')">✖ REPROVAR</button>
+                    <button class="btn-blue" style="width:auto; background:#007bff" onclick="${temVencedorReal ? `decidirLote(${loteIdx},'APROVADO')` : `alert('Não é possível aprovar: Fornecedor possui itens sem valor!')`}">✔ APROVAR</button>
+                </div>
+            </div></div><br>`;
+            
+            containerAprov.innerHTML += loteHtml;
+        });
+    }
+}
+
+// CERTIFIQUE-SE DE TER ESTA FUNÇÃO LOGO ABAIXO:
+function excluirItem(index) {
+    if (confirm("Tem certeza que deseja excluir este item da cotação?")) {
+        itens.splice(index, 1);
+        salvarNoNavegador();
+        renderizarTabelas();
+        limparCampos();
+    }
+}
+
+function decidirLote(idx, status) {
+    const lote = itensEmAprovacao[idx];
+    let numeroPedido = "";
+
+    // Solicita o número do pedido apenas se estiver aprovando
+    if (status === 'APROVADO') {
+        numeroPedido = prompt("Por favor, insira o NÚMERO DO PEDIDO para este lote:");
+        if (numeroPedido === null) return; // Cancela a operação se o usuário fechar o alerta
+        if (numeroPedido.trim() === "") numeroPedido = "N/D";
+    }
+
+    let totais = Array(lote.fornecedoresLote.length).fill(0);
+    lote.produtos.forEach(it => it.valores.forEach((v, j) => totais[j] += (v * it.qtd)));
+    
+    const valsValidos = totais.filter(t => t > 0);
+    const menor = Math.min(...valsValidos);
+    const idxV = totais.indexOf(menor);
+
+    historico.push({
+        data: lote.dataEnvio, 
+        cc: lote.centroCusto, 
+        vence: lote.fornecedoresLote[idxV],
+        total: `R$ ${menor.toFixed(2)}`, 
+        status: status, 
+        itens: lote.produtos, 
+        vIdx: idxV, 
+        conta: lote.contaContabil,
+        numeroPedido: numeroPedido, // Salva o número digitado
+        fornecedoresOriginais: [...lote.fornecedoresLote]
+    });
+
+    itensEmAprovacao.splice(idx, 1);
+    salvarNoNavegador();
+    renderizarTabelas();
+    atualizarHistorico();
+}
+
+function atualizarHistorico() {
+    const corpo = document.getElementById("tbodyHistorico");
+    if(!corpo) return;
+    corpo.innerHTML = historico.map((r, i) => 
+        `<tr>
+            <td>${r.data}</td>
+            <td>${r.cc}</td>
+            <td>${r.vence}</td>
+            <td>${r.total}</td>
+            <td>${r.status}</td>
+            <td>
+                <button onclick="gerarPDFHist(${i})" class="btn-dark" style="width:auto; padding:5px 10px">📄</button>
+                <button onclick="retornarParaAprovacao(${i})" class="btn-orange" style="width:auto; padding:5px 10px; margin-left:5px">↩</button>
+            </td>
+        </tr>`
+    ).join("");
+}
+
+function retornarParaAprovacao(idx) {
+    if (!confirm("Deseja retornar este lote para a fila de aprovação?")) return;
+    const h = historico[idx];
+    itensEmAprovacao.push({
+        id: Date.now(), 
+        dataEnvio: h.data,
+        centroCusto: h.cc, 
+        contaContabil: h.conta,
+        fornecedoresLote: h.fornecedoresOriginais || [h.vence],
+        produtos: h.itens
+    });
+    historico.splice(idx, 1);
+    salvarNoNavegador(); 
+    atualizarHistorico(); 
+    renderizarTabelas();
+    openTab('aprovacao');
+}
+
+// --- EXPORTAÇÃO PDF ---
+
+function gerarPDFMapaLote(idx) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF("l", "mm", "a4");
+    const lote = itensEmAprovacao[idx];
+
+    // --- CÁLCULOS DOS TOTAIS ---
+    let totaisForn = Array(lote.fornecedoresLote.length).fill(0);
+    lote.produtos.forEach(it => {
+        it.valores.forEach((v, fIdx) => {
+            totaisForn[fIdx] += (v * it.qtd);
+        });
+    });
+
+    const valsValidos = totaisForn.filter(t => t > 0);
+    const menor = Math.min(...valsValidos);
+    const maior = Math.max(...valsValidos);
+    const idxV = totaisForn.indexOf(menor);
+    const econ = (maior > menor && maior > 0) ? ((maior - menor) / maior) * 100 : 0;
+    const nomeVencedor = lote.fornecedoresLote[idxV] || "N/A";
+
+    // --- CABEÇALHO VERMELHO ---
+    doc.setFillColor(180, 0, 0); 
+    doc.rect(0, 0, 297, 25, 'F');
+    
+    doc.setFontSize(18);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont(undefined, 'bold');
+    doc.text(`MAPA DE COTAÇÃO - LOTE #${idx + 1}`, 15, 16);
+
+    // --- INFO DO LOTE ---
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.text(`Centro de Custo: ${lote.centroCusto} | Conta: ${lote.contaContabil}`, 15, 32);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Data de Envio: ${lote.dataEnvio}`, 15, 37);
+
+    // --- TABELA PRINCIPAL ---
+    const tabelaHtml = document.querySelectorAll('#tabAprovacaoWrapper table')[idx];
+
+    doc.autoTable({
+        html: tabelaHtml,
+        startY: 42,
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 2, halign: 'center', font: "helvetica" }, // Força fonte padrão para evitar erro de símbolo
+        headStyles: { fillColor: [180, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
+        columnStyles: { 0: { halign: 'left', cellWidth: 'auto' } },
+        didParseCell: function (data) {
+            // CORREÇÃO DE CARACTERES: Limpa entidades HTML e símbolos estranhos
+            if (data.cell.text && data.cell.text.length > 0) {
+                data.cell.text = data.cell.text.map(t => {
+                    return t.replace(/&[a-z0-9]+;/gi, '') // Remove entidades como &nbsp;
+                            .replace(/[^\x00-\x7F\xC0-\xFF]/g, ""); // Remove símbolos não-latinos
+                });
+            }
+
+            if (data.section === 'head' && data.cell.text[0]) {
+                data.cell.text[0] = data.cell.text[0].replace(/\s*X$/, '').trim();
+            }
+
+            if (data.cell.raw && data.cell.raw.querySelector && data.cell.raw.querySelector('input')) {
+                const val = data.cell.raw.querySelector('input').value;
+                data.cell.text[0] = data.cell.raw.innerHTML.includes('R$') ? `R$ ${parseFloat(val).toFixed(2)}` : val;
+            }
+
+            if (data.cell.raw && data.cell.raw.classList && data.cell.raw.classList.contains('melhor')) {
+                data.cell.styles.fillColor = [195, 230, 203]; 
+            }
+            
+            // LINHA TOTAL LOTE EM VERMELHO
+            if (data.section === 'foot') {
+                data.cell.styles.fillColor = [180, 0, 0];
+                data.cell.styles.textColor = [255, 255, 255];
+                data.cell.styles.fontStyle = 'bold';
+            }
+        }
+    });
+
+    // --- BLOCO DO VENCEDOR ABAIXO DA TABELA ---
+    let finalY = doc.lastAutoTable.finalY + 10;
+    doc.setDrawColor(200, 200, 200);
+    doc.line(15, finalY, 282, finalY);
+
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Vencedor:`, 15, finalY + 10);
+    doc.setTextColor(0, 150, 0); 
+    doc.setFont(undefined, 'bold');
+    doc.text(nomeVencedor, 35, finalY + 10);
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Valor:`, 110, finalY + 10);
+    doc.setFont(undefined, 'bold');
+    doc.text(`R$ ${menor.toFixed(2)}`, 125, finalY + 10);
+
+    doc.setFont(undefined, 'normal');
+    doc.text(`Economia:`, 210, finalY + 10);
+    doc.setTextColor(0, 100, 255); 
+    doc.setFont(undefined, 'bold');
+    doc.text(`${econ.toFixed(2)}%`, 232, finalY + 10);
+
+    doc.save(`Mapa_Lote_${idx + 1}.pdf`);
+}
+
+function gerarPDFListaPedido(idx) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF("p", "mm", "a4");
+    const lote = itensEmAprovacao[idx];
+
+    // --- CABEÇALHO VERMELHO (Padronizado) ---
+    doc.setFillColor(180, 0, 0); 
+    doc.rect(0, 0, 210, 20, 'F');
+    
+    doc.setFontSize(16);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont(undefined, 'bold');
+    doc.text("SOLICITAÇÃO DE ORÇAMENTO", 14, 13);
+
+    // --- INFORMAÇÕES DE REFERÊNCIA (Com Conta Contábil) ---
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'bold');
+    doc.text(`Centro de Custo: ${lote.centroCusto}`, 14, 28);
+    doc.text(`Conta Contábil: ${lote.contaContabil}`, 14, 33); // Adicionado conforme solicitado
+    doc.setFont(undefined, 'normal');
+    doc.text(`Data: ${lote.dataEnvio} | Ref. Lote: #${idx + 1}`, 14, 38);
+
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, 42, 196, 42);
+
+    // --- TABELA APENAS COM PRODUTOS E QUANTIDADES ---
+    doc.autoTable({
+        startY: 48,
+        head: [['ITEM', 'PRODUTO / DESCRIÇÃO', 'QUANTIDADE']],
+        body: lote.produtos.map((it, i) => [
+            i + 1,
+            it.p,
+            it.qtd
+        ]),
+        theme: 'grid',
+        styles: { fontSize: 10, cellPadding: 4, font: "helvetica" },
+        headStyles: { fillColor: [180, 0, 0], textColor: [255, 255, 255] }, // Cor vermelha na tabela
+        columnStyles: {
+            0: { cellWidth: 20, halign: 'center' },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 40, halign: 'center' }
+        },
+        didParseCell: function (data) {
+            // Limpeza de caracteres para evitar erros de acentuação na web
+            if (data.cell.text && data.cell.text.length > 0) {
+                data.cell.text = data.cell.text.map(t => 
+                    t.replace(/&[a-z0-9]+;/gi, '').replace(/[^\x00-\x7F\xC0-\xFF]/g, "")
+                );
+            }
+        }
+    });
+
+    // Rodapé para assinaturas
+    let finalY = doc.lastAutoTable.finalY + 20;
+    doc.setFontSize(9);
+    doc.text("Observações: __________________________________________________________________", 14, finalY);
+
+    doc.save(`Pedido_Lote_${idx + 1}.pdf`);
+}
+
+function gerarPDFHist(idx) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF("p", "mm", "a4");
+    const r = historico[idx];
+
+    // --- CABEÇALHO VERMELHO ---
+    doc.setFillColor(180, 0, 0); 
+    doc.rect(0, 0, 210, 20, 'F');
+    
+    doc.setFontSize(16);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont(undefined, 'bold');
+    doc.text("ORDEM DE COMPRA", 14, 13);
+
+    // --- INFORMAÇÕES GERAIS ---
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'bold');
+    doc.text(`Centro de Custo: ${r.cc}`, 14, 28);
+    doc.text(`Conta Contábil: ${r.conta || 'N/A'}`, 14, 33);
+    
+    doc.setTextColor(180, 0, 0);
+    doc.text(`PEDIDO Nº: ${r.numeroPedido || 'N/D'}`, 14, 38);
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Data: ${r.data}`, 110, 28);
+
+    // --- TABELA DE ITENS ---
+    doc.autoTable({ 
+        startY: 45, 
+        head: [['ITEM', 'PRODUTO / DESCRIÇÃO', 'QTD', 'UNITÁRIO', 'TOTAL']], 
+        body: r.itens.map((it, i) => [
+            i + 1,
+            it.p, 
+            it.qtd, 
+            `R$ ${it.valores[r.vIdx].toFixed(2)}`, 
+            `R$ ${(it.valores[r.vIdx] * it.qtd).toFixed(2)}`
+        ]),
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 3, font: "helvetica" },
+        headStyles: { fillColor: [180, 0, 0], textColor: [255, 255, 255] },
+        didParseCell: function (data) {
+            if (data.cell.text && data.cell.text.length > 0) {
+                data.cell.text = data.cell.text.map(t => 
+                    t.replace(/&[a-z0-9]+;/gi, '').replace(/[^\x00-\x7F\xC0-\xFF]/g, "")
+                );
+            }
+        }
+    });
+
+    // --- INFORMAÇÕES DO VENCEDOR ABAIXO DA TABELA ---
+    let finalY = doc.lastAutoTable.finalY + 10;
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, finalY, 196, finalY);
+
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Fornecedor:`, 14, finalY + 10);
+    doc.setTextColor(0, 150, 0); 
+    doc.setFont(undefined, 'bold');
+    doc.text(`${r.vence}`, 55, finalY + 10);
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Total da Ordem:`, 110, finalY + 10);
+    doc.setFont(undefined, 'bold');
+    doc.text(`${r.total}`, 145, finalY + 10);
+
+    // --- OBSERVAÇÕES FINAIS ---
+    let obsY = finalY + 25;
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont(undefined, 'bold');
+    doc.text("Observações:", 14, obsY);
+    
+    doc.setFont(undefined, 'normal');
+    doc.text("* Informamos que o Nº do Pedido precisa constar registrado na nota fiscal.", 14, obsY + 6);
+    doc.text("* Solicitamos o envio da nota fiscal para os e-mails:", 14, obsY + 12);
+    
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(0, 0, 255);
+    doc.text("tex.nascimento@pscg.com.br e operacoes@pscg.com.br", 14, obsY + 18);
+
+    doc.save(`Ordem_Pedido_${r.numeroPedido}_${r.vence}.pdf`);
+}
+// --- AUXILIARES ---
+
+function openTab(name) {
+    document.querySelectorAll('.tab-content, .tab').forEach(el => el.classList.remove('active'));
+    document.getElementById(name).classList.add('active');
+    const tabs = document.querySelectorAll('.tab');
+    if(name === 'cotacao') tabs[0].classList.add('active');
+    if(name === 'aprovacao') {
+        tabs[1].classList.add('active');
+        const show = itensEmAprovacao.length > 0;
+        document.getElementById('lockScreen').style.display = show ? 'none' : 'block';
+        document.getElementById('aprovContent').style.display = show ? 'block' : 'none';
+    }
+    if(name === 'historico') tabs[2].classList.add('active');
+    if(name === 'config') tabs[3].classList.add('active');
+    renderizarTabelas();
+}
+
+function limparCampos() { 
+    document.getElementById("editIndex").value = "-1"; 
+    document.getElementById("produtoSelect").value = ""; 
+    document.getElementById("quantidade").value = "1"; 
+    fornecedores.forEach((_, i) => { if(document.getElementById(`v${i}`)) document.getElementById(`v${i}`).value = ""; });
+}
+
+function editarItem(idx) {
+    const it = itens[idx]; 
+    document.getElementById("editIndex").value = idx; 
+    document.getElementById("produtoSelect").value = it.p; 
+    document.getElementById("quantidade").value = it.qtd;
+    it.valores.forEach((v, i) => { if(document.getElementById(`v${i}`)) document.getElementById(`v${i}`).value = v; });
+}
+
+function importarExcel() {
+    const file = document.getElementById("importExcel").files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        produtosImportados = {}; 
+        rows.forEach(r => {
+            const nome = String(r.Produto || r.Item || r.PRODUTO || "").trim();
+            const qtd = parseFloat(r.Quantidade || r.Qtd || r.QTD || 1);
+            if (nome) produtosImportados[nome] = qtd;
+        });
+        atualizarInterface();
+        salvarNoNavegador();
+        alert("✅ Itens carregados!");
+    };
+    reader.readAsArrayBuffer(file);
+}
+</script>
+</body>
+</html>
