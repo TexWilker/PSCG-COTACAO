@@ -206,6 +206,8 @@ db.ref().on('value', (snapshot) => {
 
 // 3. FUNÇÃO DE SALVAMENTO (UNIFICADA)
 function salvarNoNavegador() {
+    console.log("Tentando salvar...", {fornecedores, itens}); // Log para teste
+    
     db.ref().update({
         'pscg_fornecedores': fornecedores,
         'pscg_itens': itens,
@@ -213,11 +215,15 @@ function salvarNoNavegador() {
         'pscg_aprovacao': itensEmAprovacao,
         'pscg_importados': produtosImportados,
         'pscg_banco_forn': bancoFornecedores
-    }).then(() => {
-        console.log("Sincronizado na Nuvem!");
-    }).catch(err => console.error("Erro ao salvar:", err));
-}
-function importarExcel() {
+    })
+    .then(() => {
+        console.log("✅ Sucesso: Dados gravados no Firebase!");
+    })
+    .catch((error) => {
+        console.error("❌ Erro detalhado do Firebase:", error);
+        alert("Erro ao salvar: " + error.message);
+    });
+}function importarExcel() {
     const file = document.getElementById("importExcel").files[0];
     if (!file) {
         alert("Por favor, selecione um arquivo Excel primeiro.");
@@ -405,22 +411,39 @@ function excluirFornecedorBase(idx) {
 // --- LÓGICA DE COTAÇÃO E ITENS ---
 
 function salvarItem() {
-    const p = document.getElementById("produtoSelect").value;
-    const q = parseFloat(document.getElementById("quantidade").value);
-    const idx = parseInt(document.getElementById("editIndex").value);
-    const vals = fornecedores.map((_, i) => parseFloat(document.getElementById(`v${i}`).value) || 0);
+    const p = document.getElementById("produtoSelect").value.trim();
+    const qtd = parseFloat(document.getElementById("quantidade").value) || 0;
+    const editIdx = parseInt(document.getElementById("editIndex").value);
 
-    if(!p || isNaN(q)) return alert("Preencha produto e quantidade!");
-    
-    if(idx === -1) itens.push({p, qtd: q, valores: vals}); 
-    else itens[idx] = {p, qtd: q, valores: vals};
-    
-    salvarNoNavegador();
-    limparCampos(); 
-    renderizarTabelas(); 
-}
+    if (!p || qtd <= 0) {
+        alert("Selecione um produto e uma quantidade válida!");
+        return;
+    }
 
-function liberarParaAprovacao() {
+    // Pega os preços dos inputs v0, v1, v2...
+    const valores = fornecedores.map((_, i) => {
+        const campo = document.getElementById(`v${i}`);
+        return campo ? (parseFloat(campo.value) || 0) : 0;
+    });
+
+    if (editIdx > -1) {
+        itens[editIdx] = { p, qtd, valores };
+    } else {
+        itens.push({ p, qtd, valores });
+    }
+
+    // Tenta salvar no Firebase
+    db.ref('pscg_itens').set(itens)
+        .then(() => {
+            alert("✅ Item salvo com sucesso na nuvem!");
+            limparCampos();
+            renderizarTabelas();
+        })
+        .catch((error) => {
+            console.error("Erro real:", error);
+            alert("Erro ao gravar: " + error.message);
+        });
+}function liberarParaAprovacao() {
     const cc = document.getElementById("centroCusto").value;
     const conta = document.getElementById("contaContabil").value;
     if(!cc || !conta || itens.length === 0) return alert("Preencha CC, Conta e adicione itens!");
@@ -493,13 +516,24 @@ function renderizarTabelas() {
             html += `</tr></thead><tbody>`;
 
             itens.forEach((it, idx) => {
-                const min = Math.min(...it.valores.filter(v => v > 0));
+                // AJUSTE DE SEGURANÇA: Garante que it.valores existe e é um array
+                const listaValores = it.valores || [];
+                const precosValidos = listaValores.filter(v => typeof v === 'number' && v > 0);
+                const min = precosValidos.length > 0 ? Math.min(...precosValidos) : null;
+
                 html += `<tr><td style="text-align:left">${it.p}</td><td>${it.qtd}</td>`;
-                it.valores.forEach((v) => {
+                
+                // Percorre os fornecedores para garantir que a tabela não quebre se faltar valor
+                fornecedores.forEach((_, fIdx) => {
+                    const v = listaValores[fIdx] || 0;
                     const sub = v * it.qtd;
-                    const cls = (v === min && v > 0) ? 'melhor' : '';
-                    html += `<td class="${cls}">R$ ${v.toFixed(2)}</td><td class="${cls}">R$ ${sub.toFixed(2)}</td>`;
+                    const cls = (min !== null && v === min && v > 0) ? 'melhor' : '';
+                    
+                    html += `
+                        <td class="${cls}">R$ ${v.toFixed(2)}</td>
+                        <td class="${cls}">R$ ${sub.toFixed(2)}</td>`;
                 });
+
                 html += `<td style="display:flex; gap:5px; justify-content:center; border:none">
                     <button onclick="editarItem(${idx})" class="btn-acao btn-blue" title="Editar">✏️</button>
                     <button onclick="excluirItem(${idx})" class="btn-acao btn-red" title="Excluir">🗑️</button>
@@ -529,25 +563,28 @@ function renderizarTabelas() {
             lote.fornecedoresLote.forEach(() => loteHtml += `<th>UNIT.</th><th>TOTAL</th>`);
             loteHtml += `</tr></thead><tbody>`;
             
-            // LÓGICA DE VALIDAÇÃO: Criamos um rastreador para fornecedores com itens zerados
             let fornecedorCompleto = Array(lote.fornecedoresLote.length).fill(true);
             let totaisForn = Array(lote.fornecedoresLote.length).fill(0);
 
             lote.produtos.forEach((it, pIdx) => {
-                const min = Math.min(...it.valores.filter(v => v > 0));
+                const listaValoresLote = it.valores || [];
+                const precosValidosLote = listaValoresLote.filter(v => typeof v === 'number' && v > 0);
+                const min = precosValidosLote.length > 0 ? Math.min(...precosValidosLote) : null;
+
                 loteHtml += `<tr><td style="text-align:left">${it.p}</td>
                     <td><input type="number" value="${it.qtd}" style="width:50px" onchange="editarNoLote(${loteIdx},${pIdx},'qtd',-1,this.value)"></td>`;
                 
-                it.valores.forEach((v, fIdx) => {
+                lote.fornecedoresLote.forEach((_, fIdx) => {
+                    const v = listaValoresLote[fIdx] || 0;
                     const sub = v * it.qtd; 
                     totaisForn[fIdx] += sub;
                     
-                    // Se encontrar um valor 0 ou vazio, marca o fornecedor como incompleto
                     if (v <= 0) fornecedorCompleto[fIdx] = false;
 
-                    const cls = (v === min && v > 0) ? 'melhor' : '';
-                    loteHtml += `<td class="${cls}"><input type="number" value="${v.toFixed(2)}" style="width:80px" onchange="editarNoLote(${loteIdx},${pIdx},'valor',${fIdx},this.value)"></td>
-                                 <td class="${cls}">R$ ${sub.toFixed(2)}</td>`;
+                    const cls = (min !== null && v === min && v > 0) ? 'melhor' : '';
+                    loteHtml += `
+                        <td class="${cls}"><input type="number" value="${v.toFixed(2)}" style="width:80px" onchange="editarNoLote(${loteIdx},${pIdx},'valor',${fIdx},this.value)"></td>
+                        <td class="${cls}">R$ ${sub.toFixed(2)}</td>`;
                 });
                 loteHtml += `</tr>`;
             });
@@ -556,14 +593,11 @@ function renderizarTabelas() {
             totaisForn.forEach(t => loteHtml += `<td colspan="2">R$ ${t.toFixed(2)}</td>`);
             loteHtml += `</tr></tfoot></table>`;
 
-            // --- FILTRO DE VENCEDOR VÁLIDO ---
-            // Só considera fornecedores que tenham t > 0 E todos os itens preenchidos
             const valsValidos = totaisForn.filter((t, idx) => t > 0 && fornecedorCompleto[idx]);
             const menor = valsValidos.length > 0 ? Math.min(...valsValidos) : 0;
             const idxV = totaisForn.indexOf(menor);
             const temVencedorReal = valsValidos.length > 0;
 
-            // Cálculo da Economia (baseado no maior valor total vs menor valor válido)
             const maior = Math.max(...totaisForn);
             const econ = (maior > menor && menor > 0) ? ((maior - menor) / maior) * 100 : 0;
 
@@ -595,7 +629,6 @@ function renderizarTabelas() {
         });
     }
 }
-
 // CERTIFIQUE-SE DE TER ESTA FUNÇÃO LOGO ABAIXO:
 function excluirItem(index) {
     if (confirm("Tem certeza que deseja excluir este item da cotação?")) {
