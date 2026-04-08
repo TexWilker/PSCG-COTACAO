@@ -394,11 +394,54 @@ function renderizarGestao() {
     corpo.innerHTML = bancoFornecedores.map((f, i) => `
         <tr>
             <td style="text-align: left; padding-left: 20px;">${f}</td>
-            <td><button class="btn-red" style="width:auto; padding: 5px 10px" onclick="excluirFornecedorBase(${i})">Excluir</button></td>
+            <td>
+                <button class="btn-blue" style="width:auto; padding: 5px 10px; margin-right: 5px;" onclick="editarFornecedorBase(${i})">Editar</button>
+                <button class="btn-red" style="width:auto; padding: 5px 10px" onclick="excluirFornecedorBase(${i})">Excluir</button>
+            </td>
         </tr>
     `).join("");
 }
+function editarFornecedorBase(idx) {
+    const nomeAntigo = bancoFornecedores[idx];
+    const novoNome = prompt(`Editar nome do fornecedor:`, nomeAntigo);
 
+    if (novoNome === null) return; // Usuário cancelou
+    
+    const nomeFormatado = novoNome.trim().toUpperCase();
+
+    if (!nomeFormatado) {
+        alert("O nome não pode estar vazio!");
+        return;
+    }
+
+    if (bancoFornecedores.includes(nomeFormatado) && nomeFormatado !== nomeAntigo) {
+        alert("Já existe um fornecedor com este nome!");
+        return;
+    }
+
+    // 1. Atualiza no Banco de Fornecedores (Cadastro Permanente)
+    bancoFornecedores[idx] = nomeFormatado;
+
+    // 2. Atualiza nas cotações em andamento (Aba 1), se o nome antigo estiver lá
+    const indexNaCotacao = fornecedores.indexOf(nomeAntigo);
+    if (indexNaCotacao !== -1) {
+        fornecedores[indexNaCotacao] = nomeFormatado;
+    }
+
+    // 3. Atualiza nos lotes em aprovação, se necessário
+    itensEmAprovacao.forEach(lote => {
+        const idxLote = lote.fornecedoresLote.indexOf(nomeAntigo);
+        if (idxLote !== -1) {
+            lote.fornecedoresLote[idxLote] = nomeFormatado;
+        }
+    });
+
+    salvarNoNavegador();
+    renderizarGestao();
+    atualizarInterface();
+    renderizarTabelas();
+    alert("✅ Fornecedor atualizado com sucesso!");
+}
 function excluirFornecedorBase(idx) {
     if(!confirm("Remover do cadastro permanente?")) return;
     bancoFornecedores.splice(idx, 1);
