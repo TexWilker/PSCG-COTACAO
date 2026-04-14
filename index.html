@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Mobitex: PSCG Smart Quote </title>
+    <title>PSCG Smart Quote - Executive Version</title>
 
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
@@ -106,7 +106,6 @@ td {
             <option value="Predial">Predial</option>
             <option value="Pintura">Pintura</option>
             <option value="Hidraulica">Hidraulica</option>
-			<option value="Mecânica">Mecânica</option>
         </select>
     </div>
     <select id="fornecedorSelectBase"></select>
@@ -510,39 +509,16 @@ function salvarItem() {
 // --- FUNÇÕES DE EDIÇÃO NA ABA DE APROVAÇÃO (CORREÇÃO) ---
 
 function editarNoLote(loteIdx, prodIdx, tipo, fornIdx, novoValor) {
-    // 1. Converte e valida o valor de entrada
     const val = parseFloat(novoValor) || 0;
-    
-    // 2. Localiza o lote específico na memória local
-    const lote = itensEmAprovacao[loteIdx];
-    if (!lote) return;
-
-    // 3. Aplica a alteração conforme o tipo (Quantidade ou Valor Unitário)
     if (tipo === 'qtd') {
-        lote.produtos[prodIdx].qtd = val;
+        itensEmAprovacao[loteIdx].produtos[prodIdx].qtd = val;
     } else if (tipo === 'valor') {
-        // Garante que o array de valores exista para evitar erros de undefined
-        if (!lote.produtos[prodIdx].valores) {
-            lote.produtos[prodIdx].valores = [];
-        }
-        lote.produtos[prodIdx].valores[fornIdx] = val;
+        itensEmAprovacao[loteIdx].produtos[prodIdx].valores[fornIdx] = val;
     }
-
-    // 4. Atualização Inteligente no Firebase
-    // Em vez de salvar TUDO, salvamos apenas o array de itens em aprovação
-    db.ref('pscg_aprovacao').set(itensEmAprovacao)
-        .then(() => {
-            console.log(`✅ Lote ${loteIdx + 1} atualizado com sucesso.`);
-            
-            // 5. Re-renderiza as tabelas para atualizar os cálculos de Total e Economia
-            // O uso de 'onblur' nos inputs (mencionado anteriormente) impedirá 
-            // que a tabela "suma" enquanto você digita.
-            renderizarTabelas();
-        })
-        .catch((error) => {
-            console.error("❌ Erro ao atualizar lote:", error);
-        });
+    salvarNoNavegador();
+    renderizarTabelas();
 }
+
 function excluirFornecedorDoLote(loteIdx, fornIdx) {
     if(!confirm("Remover este fornecedor deste mapa específico?")) return;
     itensEmAprovacao[loteIdx].fornecedoresLote.splice(fornIdx, 1);
@@ -582,14 +558,13 @@ function renderizarTabelas() {
             html += `</tr></thead><tbody>`;
 
             itens.forEach((it, idx) => {
-                // Segurança contra valores inexistentes
-                const listaValores = it.valores || [];
+                // Segurança: Garante que valores seja um array
+                const listaValores = Array.isArray(it.valores) ? it.valores : [];
                 const precosValidos = listaValores.filter(v => typeof v === 'number' && v > 0);
                 const min = precosValidos.length > 0 ? Math.min(...precosValidos) : null;
 
                 html += `<tr><td style="text-align:left">${it.p}</td><td>${it.qtd}</td>`;
                 
-                // Itera sobre fornecedores para preencher as colunas corretamente
                 fornecedores.forEach((_, fIdx) => {
                     const v = listaValores[fIdx] || 0;
                     const sub = v * it.qtd;
@@ -614,6 +589,13 @@ function renderizarTabelas() {
     const containerAprov = document.getElementById('tabAprovacaoWrapper');
     if (containerAprov) {
         containerAprov.innerHTML = "";
+        
+        // Verifica se existem itens para aprovação
+        if (!itensEmAprovacao || itensEmAprovacao.length === 0) {
+            containerAprov.innerHTML = "<p class='lock-msg'>Nenhum lote aguardando aprovação.</p>";
+            return;
+        }
+
         itensEmAprovacao.forEach((lote, loteIdx) => {
             let loteHtml = `<div class="box" style="border-left: 8px solid #dc3545;">
                 <div style="display:flex; justify-content:space-between; align-items:center">
@@ -633,7 +615,8 @@ function renderizarTabelas() {
             let totaisForn = Array(lote.fornecedoresLote.length).fill(0);
 
             lote.produtos.forEach((it, pIdx) => {
-                const listaValoresLote = it.valores || [];
+                // PROTEÇÃO CRÍTICA AQUI:
+                const listaValoresLote = Array.isArray(it.valores) ? it.valores : [];
                 const precosValidosLote = listaValoresLote.filter(v => typeof v === 'number' && v > 0);
                 const min = precosValidosLote.length > 0 ? Math.min(...precosValidosLote) : null;
 
@@ -702,7 +685,6 @@ function renderizarTabelas() {
         if (!historico || historico.length === 0) {
             containerHist.innerHTML = "<p style='text-align:center; padding:20px;'>Nenhum registro no histórico.</p>";
         } else {
-            // Inverte a ordem para mostrar os mais recentes primeiro
             [...historico].reverse().forEach((lote, hIdxOriginal) => {
                 const hIdx = historico.length - 1 - hIdxOriginal;
                 const corStatus = lote.status === 'APROVADO' ? '#28a745' : '#dc3545';
@@ -725,7 +707,6 @@ function renderizarTabelas() {
         }
     }
 }
-// CERTIFIQUE-SE DE TER ESTA FUNÇÃO LOGO ABAIXO:
 function excluirItem(index) {
     if (confirm("Tem certeza que deseja excluir este item da cotação?")) {
         itens.splice(index, 1);
@@ -1105,24 +1086,6 @@ function openTab(name) {
     renderizarTabelas();
 }
 
-function atualizarTotalAprovacao(inputUnitario) {
-    // 1. Encontra a linha (tr) onde o input está
-    const linha = inputUnitario.closest('tr');
-    
-    // 2. Pega a quantidade (que geralmente está em uma célula de texto ou input)
-    // Ajuste o seletor conforme a sua tabela (ex: segunda célula)
-    const qtd = parseFloat(linha.cells[1].innerText) || 0; 
-    
-    // 3. Pega o novo valor unitário digitado
-    const valorUnitario = parseFloat(inputUnitario.value) || 0;
-    
-    // 4. Calcula o total
-    const valorTotal = qtd * valorUnitario;
-    
-    // 5. Atualiza a célula do Valor Total na mesma linha
-    // Supondo que o Total seja a 4ª célula (índice 3)
-    linha.cells[3].innerText = valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
 function limparCampos() { 
     document.getElementById("editIndex").value = "-1"; 
     document.getElementById("produtoSelect").value = ""; 
