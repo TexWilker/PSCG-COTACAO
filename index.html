@@ -1082,6 +1082,24 @@ function openTab(name) {
     renderizarTabelas();
 }
 
+function atualizarTotalAprovacao(inputUnitario) {
+    // 1. Encontra a linha (tr) onde o input está
+    const linha = inputUnitario.closest('tr');
+    
+    // 2. Pega a quantidade (que geralmente está em uma célula de texto ou input)
+    // Ajuste o seletor conforme a sua tabela (ex: segunda célula)
+    const qtd = parseFloat(linha.cells[1].innerText) || 0; 
+    
+    // 3. Pega o novo valor unitário digitado
+    const valorUnitario = parseFloat(inputUnitario.value) || 0;
+    
+    // 4. Calcula o total
+    const valorTotal = qtd * valorUnitario;
+    
+    // 5. Atualiza a célula do Valor Total na mesma linha
+    // Supondo que o Total seja a 4ª célula (índice 3)
+    linha.cells[3].innerText = valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
 function limparCampos() { 
     document.getElementById("editIndex").value = "-1"; 
     document.getElementById("produtoSelect").value = ""; 
