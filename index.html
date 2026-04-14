@@ -509,14 +509,38 @@ function salvarItem() {
 // --- FUNÇÕES DE EDIÇÃO NA ABA DE APROVAÇÃO (CORREÇÃO) ---
 
 function editarNoLote(loteIdx, prodIdx, tipo, fornIdx, novoValor) {
+    // 1. Converte e valida o valor de entrada
     const val = parseFloat(novoValor) || 0;
+    
+    // 2. Localiza o lote específico na memória local
+    const lote = itensEmAprovacao[loteIdx];
+    if (!lote) return;
+
+    // 3. Aplica a alteração conforme o tipo (Quantidade ou Valor Unitário)
     if (tipo === 'qtd') {
-        itensEmAprovacao[loteIdx].produtos[prodIdx].qtd = val;
+        lote.produtos[prodIdx].qtd = val;
     } else if (tipo === 'valor') {
-        itensEmAprovacao[loteIdx].produtos[prodIdx].valores[fornIdx] = val;
+        // Garante que o array de valores exista para evitar erros de undefined
+        if (!lote.produtos[prodIdx].valores) {
+            lote.produtos[prodIdx].valores = [];
+        }
+        lote.produtos[prodIdx].valores[fornIdx] = val;
     }
-    salvarNoNavegador();
-    renderizarTabelas();
+
+    // 4. Atualização Inteligente no Firebase
+    // Em vez de salvar TUDO, salvamos apenas o array de itens em aprovação
+    db.ref('pscg_aprovacao').set(itensEmAprovacao)
+        .then(() => {
+            console.log(`✅ Lote ${loteIdx + 1} atualizado com sucesso.`);
+            
+            // 5. Re-renderiza as tabelas para atualizar os cálculos de Total e Economia
+            // O uso de 'onblur' nos inputs (mencionado anteriormente) impedirá 
+            // que a tabela "suma" enquanto você digita.
+            renderizarTabelas();
+        })
+        .catch((error) => {
+            console.error("❌ Erro ao atualizar lote:", error);
+        });
 }
 
 function excluirFornecedorDoLote(loteIdx, fornIdx) {
