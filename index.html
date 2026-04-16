@@ -614,13 +614,16 @@ function renderizarTabelas() {
     if (containerAprov) {
         containerAprov.innerHTML = "";
         
-        // Verifica se existem itens para aprovação
         if (!itensEmAprovacao || itensEmAprovacao.length === 0) {
             containerAprov.innerHTML = "<p class='lock-msg'>Nenhum lote aguardando aprovação.</p>";
             return;
         }
 
         itensEmAprovacao.forEach((lote, loteIdx) => {
+            // Objeto para calcular o menor preço por fornecedor NESTE lote
+            let resumoFornLote = {};
+            lote.fornecedoresLote.forEach(f => resumoFornLote[f] = 0);
+
             let loteHtml = `<div class="box" style="border-left: 8px solid #dc3545;">
                 <div style="display:flex; justify-content:space-between; align-items:center">
                     <h4>📦 LOTE #${loteIdx+1} | CC: ${lote.centroCusto} | CONTA: ${lote.contaContabil}</h4>
@@ -639,7 +642,6 @@ function renderizarTabelas() {
             let totaisForn = Array(lote.fornecedoresLote.length).fill(0);
 
             lote.produtos.forEach((it, pIdx) => {
-                // PROTEÇÃO CRÍTICA AQUI:
                 const listaValoresLote = Array.isArray(it.valores) ? it.valores : [];
                 const precosValidosLote = listaValoresLote.filter(v => typeof v === 'number' && v > 0);
                 const min = precosValidosLote.length > 0 ? Math.min(...precosValidosLote) : null;
@@ -647,14 +649,21 @@ function renderizarTabelas() {
                 loteHtml += `<tr><td style="text-align:left">${it.p}</td>
                     <td><input type="number" value="${it.qtd}" style="width:50px" onchange="editarNoLote(${loteIdx},${pIdx},'qtd',-1,this.value)"></td>`;
                 
-                lote.fornecedoresLote.forEach((_, fIdx) => {
+                lote.fornecedoresLote.forEach((fNome, fIdx) => {
                     const v = listaValoresLote[fIdx] || 0;
                     const sub = v * it.qtd; 
                     totaisForn[fIdx] += sub;
                     
                     if (v <= 0) fornecedorCompleto[fIdx] = false;
 
-                    const cls = (min !== null && v === min && v > 0) ? 'melhor' : '';
+                    const eOMelhor = (min !== null && v === min && v > 0);
+                    const cls = eOMelhor ? 'melhor' : '';
+
+                    // Acumula para o resumo individual por fornecedor
+                    if (eOMelhor) {
+                        resumoFornLote[fNome] += sub;
+                    }
+
                     loteHtml += `
                         <td class="${cls}"><input type="number" value="${v.toFixed(2)}" style="width:80px" onchange="editarNoLote(${loteIdx},${pIdx},'valor',${fIdx},this.value)"></td>
                         <td class="${cls}">R$ ${sub.toFixed(2)}</td>`;
@@ -662,15 +671,32 @@ function renderizarTabelas() {
                 loteHtml += `</tr>`;
             });
             
-            loteHtml += `</tbody><tfoot style="background:#eee; font-weight:bold"><tr><td colspan="2" style="text-align:right">TOTAL LOTE:</td>`;
+            loteHtml += `</tbody><tfoot style="background:#eee; font-weight:bold"><tr><td colspan="2" style="text-align:right">TOTAL FECHADO:</td>`;
             totaisForn.forEach(t => loteHtml += `<td colspan="2">R$ ${t.toFixed(2)}</td>`);
             loteHtml += `</tr></tfoot></table>`;
 
+            // --- NOVO BLOCO: RESUMO DE MENOR PREÇO POR FORNECEDOR (DENTRO DA ABA APROVAÇÃO) ---
+            loteHtml += `<div style="margin-top:20px; padding:15px; background:#f0f7ff; border:1px solid #007bff; border-radius:8px;">
+                            <h5 style="margin-top:0; color:#0056b3;">🏆 COMPRA FRACIONADA (MENOR PREÇO POR ITEM)</h5>
+                            <div style="display: flex; flex-wrap: wrap; gap: 10px;">`;
+            
+            lote.fornecedoresLote.forEach(f => {
+                const totalF = resumoFornLote[f];
+                if(totalF > 0) {
+                    loteHtml += `
+                        <div style="flex:1; min-width:200px; padding:10px; background:#fff; border-radius:5px; border-left:4px solid #28a745; box-shadow: 2px 2px 5px rgba(0,0,0,0.05)">
+                            <div style="font-size:11px; font-weight:bold; color:#1a2a3a">${f}</div>
+                            <div style="font-size:14px; color:#28a745; font-weight:bold">Menor Preço: R$ ${totalF.toFixed(2)}</div>
+                        </div>`;
+                }
+            });
+            loteHtml += `</div></div>`;
+
+            // (O restante da lógica de vencedor, botões Aprovar/Reprovar continua aqui...)
             const valsValidos = totaisForn.filter((t, idx) => t > 0 && fornecedorCompleto[idx]);
             const menor = valsValidos.length > 0 ? Math.min(...valsValidos) : 0;
             const idxV = totaisForn.indexOf(menor);
             const temVencedorReal = valsValidos.length > 0;
-
             const maior = Math.max(...totaisForn);
             const econ = (maior > menor && menor > 0) ? ((maior - menor) / maior) * 100 : 0;
 
@@ -678,13 +704,10 @@ function renderizarTabelas() {
             <div style="margin-top:20px; padding:15px; background:#fff; border:1px solid #ddd; border-radius:5px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px">
                     <div>
-                        <div style="font-size:16px">🏆 Vencedor: <strong style="color:${temVencedorReal ? '#28a745' : '#dc3545'}">
-                            ${temVencedorReal ? lote.fornecedoresLote[idxV] : "AGUARDANDO PREÇOS (Existem itens com R$ 0,00)"}
+                        <div style="font-size:16px">🏆 Vencedor (Lote Inteiro): <strong style="color:${temVencedorReal ? '#28a745' : '#dc3545'}">
+                            ${temVencedorReal ? lote.fornecedoresLote[idxV] : "AGUARDANDO PREÇOS"}
                         </strong></div>
                         <div style="font-size:18px">💰 Valor Vencedor: <strong>R$ ${menor.toFixed(2)}</strong></div>
-                        <div style="color:#dc3545; font-size:16px; font-weight:bold; margin-top:5px">
-                            📉 Economia Gerada: ${econ.toFixed(2)}%
-                        </div>
                     </div>
                     <div style="display:flex; gap:5px;">
                         <button class="btn-orange" style="width:auto; padding:8px" onclick="gerarPDFMapaLote(${loteIdx})">📄 PDF MAPA</button>
@@ -694,14 +717,13 @@ function renderizarTabelas() {
                 <div style="display:flex; gap:10px; border-top:1px solid #eee; padding-top:10px">
                     <button class="btn-dark" style="background:#6c757d; width:auto" onclick="retornarParaCotacao(${loteIdx})">↩ EDITAR</button>
                     <button class="btn-red" style="width:auto; background:#dc3545" onclick="decidirLote(${loteIdx},'REPROVADO')">✖ REPROVAR</button>
-                    <button class="btn-blue" style="width:auto; background:#007bff" onclick="${temVencedorReal ? `decidirLote(${loteIdx},'APROVADO')` : `alert('Não é possível aprovar: Fornecedor possui itens sem valor!')`}">✔ APROVAR</button>
+                    <button class="btn-blue" style="width:auto; background:#007bff" onclick="${temVencedorReal ? `decidirLote(${loteIdx},'APROVADO')` : `alert('Não é possível aprovar!')`}">✔ APROVAR</button>
                 </div>
             </div></div><br>`;
             
             containerAprov.innerHTML += loteHtml;
         });
     }
-
     // --- RENDERIZAÇÃO DA ABA 3 (HISTÓRICO) ---
     const containerHist = document.getElementById('tabHistoricoWrapper');
     if (containerHist) {
