@@ -682,12 +682,17 @@ function renderizarTabelas() {
             
             lote.fornecedoresLote.forEach(f => {
                 const totalF = resumoFornLote[f];
-                if(totalF > 0) {
-                    loteHtml += `
-                        <div style="flex:1; min-width:200px; padding:10px; background:#fff; border-radius:5px; border-left:4px solid #28a745; box-shadow: 2px 2px 5px rgba(0,0,0,0.05)">
-                            <div style="font-size:11px; font-weight:bold; color:#1a2a3a">${f}</div>
-                            <div style="font-size:14px; color:#28a745; font-weight:bold">Menor Preço: R$ ${totalF.toFixed(2)}</div>
-                        </div>`;
+    if(totalF > 0) {
+        loteHtml += `
+            <div style="flex:1; min-width:220px; padding:10px; background:#fff; border-radius:5px; border-left:4px solid #28a745; box-shadow: 2px 2px 5px rgba(0,0,0,0.05)">
+                <div style="font-size:11px; font-weight:bold; color:#1a2a3a">${f}</div>
+                <div style="font-size:14px; color:#28a745; font-weight:bold">Total Menor Preço: R$ ${totalF.toFixed(2)}</div>
+                <button class="btn-blue" 
+                        style="width:100%; margin-top:8px; font-size:10px; padding:5px; background:#28a745" 
+                        onclick="aprovarPorFornecedor(${loteIdx}, '${f}')">
+                    ✔ APROVAR ESTES ITENS
+                </button>
+            </div>`;
                 }
             });
             loteHtml += `</div></div>`;
@@ -761,7 +766,78 @@ function excluirItem(index) {
         limparCampos();
     }
 }
+function aprovarPorFornecedor(loteIdx, fornecedorNome) {
+    const lote = itensEmAprovacao[loteIdx];
+    const fIdx = lote.fornecedoresLote.indexOf(fornecedorNome);
+    
+    if (fIdx === -1) return;
 
+    let itensParaAprovar = [];
+    let itensRestantes = [];
+
+    // 1. Separa os itens que o fornecedor venceu (menor preço)
+    lote.produtos.forEach((it) => {
+        const precosValidos = it.valores.filter(v => typeof v === 'number' && v > 0);
+        const min = precosValidos.length > 0 ? Math.min(...precosValidos) : null;
+        const valorDesteForn = it.valores[fIdx];
+
+        if (min !== null && valorDesteForn === min && valorDesteForn > 0) {
+            itensParaAprovar.push(it);
+        } else {
+            itensRestantes.push(it);
+        }
+    });
+
+    if (itensParaAprovar.length === 0) {
+        alert("Este fornecedor não possui itens com menor preço neste lote.");
+        return;
+    }
+
+    const confirmacao = confirm(`Deseja aprovar os ${itensParaAprovar.length} itens ganhos por ${fornecedorNome}?`);
+
+    if (confirmacao) {
+        // Calcular o total dessa aprovação fracionada
+        let totalAprovado = 0;
+        itensParaAprovar.forEach(it => {
+            totalAprovado += (it.valores[fIdx] * it.qtd);
+        });
+
+        // 2. PREPARAR O OBJETO PARA O HISTÓRICO (Usando o padrão que seu sistema já lê)
+        const novoRegistroHistorico = {
+            data: lote.dataEnvio,
+            dataDecisao: new Date().toLocaleString('pt-BR'),
+            cc: lote.centroCusto,
+            conta: lote.contaContabil,
+            vence: fornecedorNome,
+            total: `R$ ${totalAprovado.toFixed(2)}`,
+            status: "APROVADO (FRACIONADO)",
+            itens: itensParaAprovar,
+            vIdx: 0, // Como filtramos apenas os itens dele, ele é o "índice 0" desses itens
+            numeroPedido: "FRACIONADO",
+            fornecedoresOriginais: [fornecedorNome]
+        };
+
+        // 3. SALVAR NO CAMINHO CORRETO (pscg_historico)
+        if (!historico) historico = [];
+        historico.push(novoRegistroHistorico);
+
+        // 4. ATUALIZAR O LOTE NO FIREBASE (pscg_aprovacao)
+        if (itensRestantes.length === 0) {
+            itensEmAprovacao.splice(loteIdx, 1);
+        } else {
+            itensEmAprovacao[loteIdx].produtos = itensRestantes;
+        }
+
+        // Salva tudo de uma vez no padrão do seu banco
+        db.ref().update({
+            'pscg_historico': historico,
+            'pscg_aprovacao': itensEmAprovacao
+        }).then(() => {
+            alert("Sucesso! Itens movidos para o histórico.");
+            renderizarTabelas();
+        }).catch(e => alert("Erro ao salvar: " + e.message));
+    }
+}
 function decidirLote(idx, status) {
     const lote = itensEmAprovacao[idx];
     if (!lote) return;
@@ -1038,7 +1114,7 @@ function gerarPDFHist(idx) {
     doc.text(`Conta Contábil: ${r.conta || 'N/A'}`, 14, 33); 
     
     doc.setTextColor(180, 0, 0);
-    doc.text(`PEDIDO Nº: ${r.numeroPedido || 'N/D'}`, 14, 38);
+    doc.text(`POR FAVOR INFORMAR O Nº NCM DESSE(s) ITEN(s) APROVADO(s).`, 14, 38);
 
     doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "normal");
@@ -1076,9 +1152,10 @@ function gerarPDFHist(idx) {
     });
 
     // --- INFORMAÇÕES DO VENCEDOR ABAIXO DA TABELA ---
+    
     let finalY = doc.lastAutoTable.finalY + 10;
     doc.setDrawColor(200, 200, 200);
-    doc.line(14, finalY, 196, finalY);
+    doc.line(14, finalY, 196, finalY); // Linha divisória
 
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
@@ -1087,14 +1164,19 @@ function gerarPDFHist(idx) {
     
     doc.setTextColor(0, 150, 0); 
     doc.setFont("helvetica", "bold");
-    doc.text(`${r.vence || 'Não identificado'}`, 55, finalY + 10);
+    // O nome do fornecedor começa em 38 para ficar próximo ao rótulo
+    doc.text(`${r.vence || 'Não identificado'}`, 38, finalY + 10);
 
+    // TOTAL ALINHADO À DIREITA PARA NÃO SOBREPOR
     doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "normal");
-    doc.text(`Total da Ordem:`, 110, finalY + 10);
+    doc.text(`Total da Ordem:`, 140, finalY + 10); // Afastado para a direita
+    
     doc.setFont("helvetica", "bold");
-    doc.text(`${r.total}`, 145, finalY + 10);
+    // Alinhamento manual: o valor fica logo após o texto "Total da Ordem"
+    doc.text(`${r.total}`, 172, finalY + 10);
 
+    // --- OBSERVAÇÕES FINAIS ---
     // --- OBSERVAÇÕES FINAIS ---
     let obsY = finalY + 25;
     doc.setFontSize(9);
@@ -1103,12 +1185,19 @@ function gerarPDFHist(idx) {
     doc.text("Observações:", 14, obsY);
     
     doc.setFont("helvetica", "normal");
-    doc.text("* Informamos que o Nº do Pedido precisa constar registrado na nota fiscal.", 14, obsY + 6);
-    doc.text("* Solicitamos o envio da nota fiscal para os e-mails:", 14, obsY + 12);
+    // Linha 1: Note o uso de obsY + 6
+    doc.text("* Atenção! A nota fiscal SÓ PODERÁ SER EMITIDA APÓS INFORMAMOS O Nº do Pedido (POR FAVOR AGUARDE).", 14, obsY + 6);
     
+    // Linha 2: Alterado para obsY + 12 para não sobrepor
+    doc.text("* O Nº do Pedido precisa constar registrado na nota fiscal.", 14, obsY + 12);
+    
+    // Linha 3: Alterado para obsY + 18
+    doc.text("* Solicitamos o envio da nota fiscal para os e-mails:", 14, obsY + 18);
+    
+    // Linha 4: Alterado para obsY + 24
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 0, 255);
-    doc.text("tex.nascimento@pscg.com.br e operacoes@pscg.com.br", 14, obsY + 18);
+    doc.text("tex.nascimento@pscg.com.br e operacoes@pscg.com.br", 14, obsY + 24);
 
     // Salva o arquivo
     const nomeArquivo = `Ordem_Pedido_${r.numeroPedido}_${r.vence}`.replace(/\s+/g, '_');
