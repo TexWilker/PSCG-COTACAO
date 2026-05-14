@@ -125,12 +125,9 @@ td {
         </div>
 
         <div class="box">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
-                <h2 style="margin:0; padding:10px 15px;">📝 MAPA DE COTAÇÃO</h2>
-                <button class="btn-red" onclick="limparMapaCotacao()" style="width:auto; padding:8px 16px; font-size:13px; margin:0;">🗑️ LIMPAR MAPA</button>
-            </div>
+            <h2>📝 MAPA DE COTAÇÃO </h2>
             <div id="tabCotacaoWrapper" style="overflow-x: auto;"></div>
-
+            
             <div style="margin-top: 25px;">
                 <button class="btn-gold" onclick="liberarParaAprovacao()" style="height: 60px; font-size: 18px;">🚀 ENVIAR PARA APROVAÇÃO</button>
             </div>
@@ -238,57 +235,31 @@ function salvarNoNavegador() {
             const data = new Uint8Array(e.target.result);
             const wb = XLSX.read(data, { type: 'array' });
             const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-
-            let novosProdutos = {};
-            let novosItens = [];
-
-            rows.forEach(r => {
-                let nome = String(r.Produto || r.Item || r.PRODUTO || r.ITEM || r.Descricao || r.DESCRICAO || r.Descrição || "").trim();
-                const qtd = parseFloat(r.Quantidade || r.Qtd || r.QTD || r.Reserva || r.QUANTIDADE || 1);
-
-                if (nome) {
-                    const nomeLimpo = nome.replace(/[\.\#\$\/\[\]]/g, " - ");
-                    novosProdutos[nomeLimpo] = qtd;
-
-                    // Cria o item para o mapa de cotação com array de valores zerado por fornecedor
-                    const itemExistente = itens.find(i => i.p === nomeLimpo);
-                    if (!itemExistente) {
-                        novosItens.push({
-                            p: nomeLimpo,
-                            qtd: qtd,
-                            valores: fornecedores.map(() => 0)
-                        });
-                    }
-                }
-            });
-
-            // Adiciona os novos itens ao array global sem apagar os já existentes
-            itens.push(...novosItens);
+            
+            let novosProdutos = {}; 
+            
+          rows.forEach(r => {
+    		let nome = String(r.Produto || r.Item || r.PRODUTO || "").trim();
+   	 // Garante que a quantidade seja um número
+    		const qtd = parseFloat(r.Quantidade || r.Qtd || r.QTD || r.Reserva || 1);
+    
+   		 if (nome) {
+        		const nomeLimpo = nome.replace(/[\.\#\$\/\[\]]/g, " - ");
+        		novosProdutos[nomeLimpo] = qtd; // Aqui guardamos o NOME e a QUANTIDADE
+    }
+});
 
             // SALVA NO FIREBASE
-            db.ref().update({
-                'pscg_importados': novosProdutos,
-                'pscg_itens': itens
-            })
-            .then(() => {
-                produtosImportados = novosProdutos;
-                atualizarInterface();
-                renderizarTabelas();
-
-                const totalItens = novosItens.length;
-                const ignorados = rows.length - totalItens;
-                let msg = `✅ ${totalItens} item(ns) adicionado(s) ao Mapa de Cotação!`;
-                if (ignorados > 0) msg += `\n⚠️ ${ignorados} item(ns) ignorado(s) por já existirem no mapa.`;
-                msg += `\n\nAgora adicione os fornecedores e preencha os preços no mapa abaixo.`;
-                alert(msg);
-
-                // Rola a tela até o mapa de cotação
-                document.getElementById('tabCotacaoWrapper').scrollIntoView({ behavior: 'smooth' });
-            })
-            .catch((error) => {
-                console.error("Erro Firebase:", error);
-                alert("Erro ao salvar: " + error.message);
-            });
+            db.ref('pscg_importados').set(novosProdutos)
+                .then(() => {
+                    produtosImportados = novosProdutos;
+                    atualizarInterface();
+                    alert("✅ Importado com sucesso! Caracteres especiais foram corrigidos.");
+                })
+                .catch((error) => {
+                    console.error("Erro Firebase:", error);
+                    alert("Erro ao salvar: " + error.message);
+                });
 
         } catch (err) {
             alert("Erro ao processar: " + err.message);
@@ -395,17 +366,8 @@ function adicionarFornecedorNaCotacao() {
     const nome = document.getElementById("fornecedorSelectBase").value;
     if (!nome) return alert("Selecione um fornecedor da lista!");
     if (fornecedores.includes(nome)) return alert("Este fornecedor já está na cotação!");
-
+    
     fornecedores.push(nome);
-
-    // Garante que todos os itens já existentes tenham um slot de valor para o novo fornecedor
-    itens.forEach(item => {
-        if (!Array.isArray(item.valores)) item.valores = [];
-        while (item.valores.length < fornecedores.length) {
-            item.valores.push(0);
-        }
-    });
-
     salvarNoNavegador();
     atualizarInterface();
     renderizarTabelas();
@@ -608,25 +570,10 @@ function renderizarTabelas() {
     // --- RENDERIZAÇÃO DA ABA 1 (COTAÇÃO) ---
     const containerCotacao = document.getElementById('tabCotacaoWrapper');
     if (containerCotacao) {
-        if (!itens.length) {
-            containerCotacao.innerHTML = "<p class='lock-msg'>📥 Importe uma planilha Excel para preencher o mapa automaticamente.</p>";
-        } else if (!fornecedores.length) {
-            // Mostra tabela apenas com itens, sem colunas de preço ainda
-            let html = `<div style="background:#fff3cd; border:1px solid #ffc107; border-radius:6px; padding:12px; margin-bottom:15px; font-size:14px;">
-                ⚠️ <strong>${itens.length} item(ns) importado(s).</strong> Adicione fornecedores acima para lançar os preços no mapa.
-            </div>
-            <table><thead><tr><th>#</th><th style="text-align:left">PRODUTO</th><th>QTD</th></tr></thead><tbody>`;
-            itens.forEach((it, idx) => {
-                html += `<tr>
-                    <td>${idx + 1}</td>
-                    <td style="text-align:left">${it.p}</td>
-                    <td>${it.qtd}</td>
-                </tr>`;
-            });
-            html += `</tbody></table>`;
-            containerCotacao.innerHTML = html;
+        if (!fornecedores.length || !itens.length) {
+            containerCotacao.innerHTML = "<p class='lock-msg'>Vazio. Adicione fornecedores e produtos para visualizar o mapa.</p>";
         } else {
-            let html = `<table><thead><tr><th rowspan="2">#</th><th rowspan="2" style="text-align:left">PRODUTO</th><th rowspan="2">QTD</th>`;
+            let html = `<table><thead><tr><th rowspan="2">PRODUTO</th><th rowspan="2">QTD</th>`;
             fornecedores.forEach((f, i) => {
                 html += `<th colspan="2">${f} <button class="btn-del-cotacao" onclick="excluirFornecedorDaCotacao(${i})">X</button></th>`;
             });
@@ -635,17 +582,18 @@ function renderizarTabelas() {
             html += `</tr></thead><tbody>`;
 
             itens.forEach((it, idx) => {
+                // Segurança: Garante que valores seja um array
                 const listaValores = Array.isArray(it.valores) ? it.valores : [];
                 const precosValidos = listaValores.filter(v => typeof v === 'number' && v > 0);
                 const min = precosValidos.length > 0 ? Math.min(...precosValidos) : null;
 
-                html += `<tr><td>${idx + 1}</td><td style="text-align:left">${it.p}</td><td>${it.qtd}</td>`;
-
+                html += `<tr><td style="text-align:left">${it.p}</td><td>${it.qtd}</td>`;
+                
                 fornecedores.forEach((_, fIdx) => {
                     const v = listaValores[fIdx] || 0;
                     const sub = v * it.qtd;
                     const cls = (min !== null && v === min && v > 0) ? 'melhor' : '';
-
+                    
                     html += `
                         <td class="${cls}">R$ ${v.toFixed(2)}</td>
                         <td class="${cls}">R$ ${sub.toFixed(2)}</td>`;
@@ -1256,25 +1204,6 @@ function gerarPDFHist(idx) {
     doc.save(`${nomeArquivo}.pdf`);
 }
 // --- AUXILIARES ---
-
-function limparMapaCotacao() {
-    if (!confirm("Deseja limpar todos os itens e fornecedores do mapa atual?\n\nEsta ação não pode ser desfeita.")) return;
-    itens = [];
-    fornecedores = [];
-    produtosImportados = {};
-    db.ref().update({
-        'pscg_itens': [],
-        'pscg_fornecedores': [],
-        'pscg_importados': {}
-    }).then(() => {
-        atualizarInterface();
-        renderizarTabelas();
-        // Limpa o input de arquivo para permitir reimportar o mesmo arquivo
-        const inputFile = document.getElementById('importExcel');
-        if (inputFile) inputFile.value = '';
-        alert("✅ Mapa limpo com sucesso! Importe uma nova planilha para começar.");
-    }).catch(e => alert("Erro ao limpar: " + e.message));
-}
 
 function openTab(name) {
     document.querySelectorAll('.tab-content, .tab').forEach(el => el.classList.remove('active'));
